@@ -1,22 +1,32 @@
 import { Link } from 'react-router-dom'
+import { useTheme } from '../ThemeContext'
 
 export default function AnaSayfa() {
+  const { theme, toggle } = useTheme()
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
 
       {/* NAVBAR */}
-      <nav className="bg-white shadow-sm px-8 py-4 flex items-center justify-between">
+      <nav className="bg-white dark:bg-gray-800 shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🏥</span>
-          <span className="text-xl font-bold text-blue-700">MediRandevu</span>
+          <span className="text-xl font-bold text-blue-700 dark:text-blue-400">MediRandevu</span>
         </div>
-        <div className="flex items-center gap-4">
-          <Link to="/giris" className="text-gray-600 hover:text-blue-700 font-medium">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggle}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg"
+            title={theme === 'dark' ? 'Aydınlık mod' : 'Karanlık mod'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <Link to="/giris" className="text-gray-600 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium text-sm">
             Giriş Yap
           </Link>
           <Link
             to="/kayit"
-            className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 font-medium"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium text-sm transition"
           >
             Kayıt Ol
           </Link>
@@ -33,17 +43,17 @@ export default function AnaSayfa() {
         </p>
         <Link
           to="/kayit"
-          className="bg-white text-blue-700 font-semibold px-8 py-3 rounded-lg hover:bg-blue-50 inline-block"
+          className="bg-white text-blue-700 font-semibold px-8 py-3 rounded-lg hover:bg-blue-50 inline-block transition"
         >
           Hemen Randevu Al
         </Link>
       </section>
 
       {/* RANDEVU FORMU */}
-      <section className="max-w-3xl mx-auto -mt-8 bg-white rounded-2xl shadow-lg p-8">
-        <h2 className="text-lg font-semibold text-gray-700 mb-4">Hızlı Randevu</h2>
+      <section className="max-w-3xl mx-4 sm:mx-auto -mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
+        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Hızlı Randevu</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <select className="border border-gray-200 rounded-lg px-4 py-3 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <select className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option>🏥 Bölüm Seçiniz</option>
             <option>Kardiyoloji</option>
             <option>Ortopedi</option>
@@ -51,22 +61,22 @@ export default function AnaSayfa() {
             <option>Göz Hastalıkları</option>
             <option>Dahiliye</option>
           </select>
-          <select className="border border-gray-200 rounded-lg px-4 py-3 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <select className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option>👨‍⚕️ Doktor Seçiniz</option>
           </select>
           <input
             type="date"
-            className="border border-gray-200 rounded-lg px-4 py-3 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
-        <button className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium">
+        <button className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium transition">
           Randevu Ara
         </button>
       </section>
 
       {/* HİZMETLER */}
       <section className="max-w-5xl mx-auto py-16 px-8">
-        <h2 className="text-2xl font-bold text-gray-800 text-center mb-10">
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 text-center mb-10">
           Neden MediRandevu?
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -75,19 +85,19 @@ export default function AnaSayfa() {
             { icon: '👨‍⚕️', baslik: 'Uzman Doktorlar', aciklama: 'Alanında uzman doktorlarla görüşün.' },
             { icon: '🔒', baslik: 'Güvenli Sistem', aciklama: 'Kişisel verileriniz güvende.' },
           ].map((kart) => (
-            <div key={kart.baslik} className="bg-white rounded-xl p-6 shadow-sm text-center">
+            <div key={kart.baslik} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm text-center">
               <div className="text-4xl mb-3">{kart.icon}</div>
-              <h3 className="font-semibold text-gray-800 mb-2">{kart.baslik}</h3>
-              <p className="text-gray-500 text-sm">{kart.aciklama}</p>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">{kart.baslik}</h3>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">{kart.aciklama}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* UZMANLIK ALANLARI */}
-      <section className="bg-white py-12 px-8">
+      <section className="bg-white dark:bg-gray-800 py-12 px-8">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-bold text-gray-800 text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 text-center mb-8">
             Uzmanlık Alanlarımız
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -103,10 +113,10 @@ export default function AnaSayfa() {
             ].map((uzmanlik) => (
               <div
                 key={uzmanlik.ad}
-                className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition"
+                className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition"
               >
                 <span className="text-2xl">{uzmanlik.icon}</span>
-                <span className="text-gray-700 font-medium text-sm">{uzmanlik.ad}</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">{uzmanlik.ad}</span>
               </div>
             ))}
           </div>
