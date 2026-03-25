@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 const randevular = [
@@ -13,7 +14,76 @@ const durumRenk: Record<string, string> = {
   'İptal': 'bg-red-100 text-red-700',
 }
 
+// Mock: dolu randevu slotları — backend bağlandığında API'den gelecek
+// Yapı: { doktorAdi: { 'YYYY-MM-DD': ['09:00', '10:00', ...] } }
+const doluSlotlar: Record<string, Record<string, string[]>> = {
+  'Dr. Kübra Kalan': {
+    '2026-04-01': ['09:00', '10:00', '11:00', '14:00', '15:00'], // tamamen dolu
+    '2026-04-03': ['09:00', '10:00', '11:00', '14:00', '15:00'], // tamamen dolu
+    '2026-04-08': ['09:00', '10:00', '11:00', '14:00', '15:00'], // tamamen dolu
+  },
+  'Dr. Beyza Nur Çift': {
+    '2026-04-05': ['09:00', '10:00'],
+    '2026-04-07': ['09:00', '10:00', '11:00', '14:00', '15:00'], // tamamen dolu
+  },
+  'Dr. Doğa Güler': {
+    '2026-04-02': ['09:00', '10:00', '11:00', '14:00', '15:00'], // tamamen dolu
+    '2026-04-09': ['09:00', '10:00', '11:00', '14:00', '15:00'], // tamamen dolu
+  },
+}
+
+const tumSaatler = ['09:00', '10:00', '11:00', '14:00', '15:00']
+
+/** Seçili doktor ve tarih için boş saatleri döndürür */
+function musaitSaatleriGetir(doktor: string, tarih: string): string[] {
+  if (!doktor || !tarih) return tumSaatler
+  const dolu = doluSlotlar[doktor]?.[tarih] ?? []
+  return tumSaatler.filter((s) => !dolu.includes(s))
+}
+
+/** Seçili tarihten itibaren 30 gün içinde en yakın müsait günü bulur */
+function enYakinMuzaitTarihiBul(doktor: string, baslangicTarihi: string): string | null {
+  const baslangic = new Date(baslangicTarihi)
+  for (let i = 1; i <= 30; i++) {
+    const sonraki = new Date(baslangic)
+    sonraki.setDate(baslangic.getDate() + i)
+    // Hafta sonu kontrolü (0 = Pazar, 6 = Cumartesi)
+    const gun = sonraki.getDay()
+    if (gun === 0 || gun === 6) continue
+    const tarihStr = sonraki.toISOString().split('T')[0]
+    if (musaitSaatleriGetir(doktor, tarihStr).length > 0) return tarihStr
+  }
+  return null
+}
+
+/** Tarihi Türkçe formatlar: "01 Nisan 2026" */
+function tarihFormatla(tarih: string): string {
+  const [yil, ay, gun] = tarih.split('-')
+  const aylar = [
+    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+  ]
+  return `${gun} ${aylar[parseInt(ay) - 1]} ${yil}`
+}
+
 export default function HastaPaneli() {
+  const [bolum, setBolum] = useState('')
+  const [doktor, setDoktor] = useState('')
+  const [tarih, setTarih] = useState('')
+  const [saat, setSaat] = useState('')
+
+  const musaitSaatler = musaitSaatleriGetir(doktor, tarih)
+  const gunDolu = doktor !== '' && tarih !== '' && musaitSaatler.length === 0
+  const enYakinTarih = gunDolu ? enYakinMuzaitTarihiBul(doktor, tarih) : null
+  const enYakinMusaitSaatler = enYakinTarih ? musaitSaatleriGetir(doktor, enYakinTarih) : []
+
+  function enYakinTariheGec() {
+    if (enYakinTarih) {
+      setTarih(enYakinTarih)
+      setSaat('')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
 
@@ -58,35 +128,95 @@ export default function HastaPaneli() {
           <div className="md:col-span-1 bg-white rounded-2xl shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">🗓️ Yeni Randevu Al</h2>
             <form className="flex flex-col gap-3">
-              <select className="border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm">
-                <option>Bölüm Seçiniz</option>
+
+              <select
+                value={bolum}
+                onChange={(e) => { setBolum(e.target.value); setDoktor(''); setSaat('') }}
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+              >
+                <option value="">Bölüm Seçiniz</option>
                 <option>Kardiyoloji</option>
                 <option>Ortopedi</option>
                 <option>Nöroloji</option>
                 <option>Göz Hastalıkları</option>
                 <option>Dahiliye</option>
               </select>
-              <select className="border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm">
-                <option>Doktor Seçiniz</option>
+
+              <select
+                value={doktor}
+                onChange={(e) => { setDoktor(e.target.value); setSaat('') }}
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+              >
+                <option value="">Doktor Seçiniz</option>
                 <option>Dr. Kübra Kalan</option>
                 <option>Dr. Beyza Nur Çift</option>
                 <option>Dr. Doğa Güler</option>
               </select>
+
               <input
                 type="date"
+                value={tarih}
+                onChange={(e) => { setTarih(e.target.value); setSaat('') }}
+                min={new Date().toISOString().split('T')[0]}
                 className="border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
               />
-              <select className="border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm">
-                <option>Saat Seçiniz</option>
-                <option>09:00</option>
-                <option>10:00</option>
-                <option>11:00</option>
-                <option>14:00</option>
-                <option>15:00</option>
-              </select>
+
+              {/* EN YAKIN RANDEVU ÖNERİSİ — sadece gün doluysa gösterilir */}
+              {gunDolu && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-amber-800 font-semibold text-sm mb-1">
+                    Bu gün için müsait randevu yok
+                  </p>
+                  {enYakinTarih ? (
+                    <>
+                      <p className="text-amber-700 text-xs mb-1">
+                        En yakın uygun tarih:{' '}
+                        <span className="font-semibold">{tarihFormatla(enYakinTarih)}</span>
+                      </p>
+                      <p className="text-amber-600 text-xs mb-2">
+                        Müsait saatler: {enYakinMusaitSaatler.join(' · ')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={enYakinTariheGec}
+                        className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium py-1.5 rounded-lg transition"
+                      >
+                        Bu tarihe geç →
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-amber-700 text-xs">
+                      Önümüzdeki 30 gün içinde müsait randevu bulunamadı.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* SAAT SEÇİMİ */}
+              <div>
+                <select
+                  value={saat}
+                  onChange={(e) => setSaat(e.target.value)}
+                  disabled={gunDolu || !tarih || !doktor}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Saat Seçiniz</option>
+                  {musaitSaatler.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                {/* Kısmen dolu günlerde dolu saatleri göster */}
+                {doktor && tarih && !gunDolu && musaitSaatler.length < tumSaatler.length && (
+                  <p className="text-xs text-gray-400 mt-1 px-1">
+                    Dolu: {tumSaatler.filter((s) => !musaitSaatler.includes(s)).join(', ')}
+                  </p>
+                )}
+              </div>
+
               <button
                 type="submit"
-                className="bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-medium text-sm mt-1"
+                disabled={!bolum || !doktor || !tarih || !saat}
+                className="bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-medium text-sm mt-1 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 Randevu Al
               </button>
