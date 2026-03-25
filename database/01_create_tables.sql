@@ -1,95 +1,116 @@
 -- ============================================================
 -- HASTANE RANDEVU SİSTEMİ - VERİTABANI TABLOLARI
 -- ============================================================
--- Çalıştırma sırası önemli! FK bağımlılıkları nedeniyle
--- bu sırayla çalıştır: 1→2→3→4→5
+-- Çalıştırma sırası: 1 → 2 → 3 → 4 → 5 → 6
+-- FK bağımlılıkları nedeniyle sırayla çalıştır!
 -- ============================================================
 
--- Veritabanını oluştur (ilk kez çalıştırırken)
 -- CREATE DATABASE HastaneDB;
 -- GO
 -- USE HastaneDB;
 -- GO
 
+
 -- ============================================================
--- TABLO 1: Uzmanlık Alanları
--- (Doktorlardan önce oluşturulmalı çünkü Doktorlar buna bağlı)
+-- TABLO 1: Kullanıcılar (tüm kullanıcılar buraya giriyor)
+-- Hasta da, doktor da, admin de önce buraya kaydolur.
+-- Giriş yapıldığında rol buradan okunur → hangi panele yönleneceği belirlenir.
+-- ============================================================
+CREATE TABLE Kullaniciler (
+    KullaniciID     INT           NOT NULL IDENTITY(1,1),
+    Email           NVARCHAR(100) NOT NULL,
+    SifreHash       NVARCHAR(255) NOT NULL,               -- Şifre düz metin saklanmaz!
+    Rol             NVARCHAR(10)  NOT NULL,               -- 'Hasta' / 'Doktor' / 'Admin'
+    Ad              NVARCHAR(50)  NOT NULL,
+    Soyad           NVARCHAR(50)  NOT NULL,
+    OlusturmaTarihi DATETIME      NOT NULL DEFAULT GETDATE(),
+
+    CONSTRAINT PK_Kullaniciler PRIMARY KEY (KullaniciID),
+    CONSTRAINT UQ_Kullaniciler_Email UNIQUE (Email),
+    CONSTRAINT CK_Kullaniciler_Rol CHECK (Rol IN ('Hasta', 'Doktor', 'Admin'))
+);
+
+
+-- ============================================================
+-- TABLO 2: Uzmanlık Alanları
+-- (Doktorlar tablosundan önce oluşturulmalı)
 -- ============================================================
 CREATE TABLE Uzmanliklar (
-    UzmanlikID   INT           NOT NULL IDENTITY(1,1),  -- Otomatik artan numara (1,2,3...)
-    UzmanlikAdi  NVARCHAR(100) NOT NULL,                -- Kardiyoloji, Ortopedi vb.
+    UzmanlikID  INT           NOT NULL IDENTITY(1,1),
+    UzmanlikAdi NVARCHAR(100) NOT NULL,
 
-    CONSTRAINT PK_Uzmanliklar PRIMARY KEY (UzmanlikID)  -- Bu tablonun kimlik alanı
-);
-
--- ============================================================
--- TABLO 2: Doktorlar
--- ============================================================
-CREATE TABLE Doktorlar (
-    DoktorID     INT           NOT NULL IDENTITY(1,1),
-    Ad           NVARCHAR(50)  NOT NULL,
-    Soyad        NVARCHAR(50)  NOT NULL,
-    UzmanlikID   INT           NOT NULL,               -- Hangi uzmanlık alanında?
-    Telefon      NVARCHAR(20)  NULL,
-    Email        NVARCHAR(100) NULL,
-    OlusturmaTarihi DATETIME   NOT NULL DEFAULT GETDATE(),
-
-    CONSTRAINT PK_Doktorlar PRIMARY KEY (DoktorID),
-    CONSTRAINT FK_Doktorlar_Uzmanliklar                -- Uzmanliklar tablosuna bağlı
-        FOREIGN KEY (UzmanlikID) REFERENCES Uzmanliklar(UzmanlikID)
+    CONSTRAINT PK_Uzmanliklar PRIMARY KEY (UzmanlikID)
 );
 
 
 -- ============================================================
--- TABLO 3: Hastalar (Sisteme kayıt olan kullanıcılar)
+-- TABLO 3: Hastalar (hastalara özgü ek bilgiler)
+-- Her hastanın Kullaniciler tablosunda bir kaydı olmak zorunda.
 -- ============================================================
 CREATE TABLE Hastalar (
-    HastaID      INT           NOT NULL IDENTITY(1,1),
-    Ad           NVARCHAR(50)  NOT NULL,
-    Soyad        NVARCHAR(50)  NOT NULL,
-    TCKimlik     NVARCHAR(11)  NULL,                   -- Opsiyonel
-    DogumTarihi  DATE          NULL,
-    Cinsiyet     NVARCHAR(10)  NULL,                   -- 'Erkek' veya 'Kadın'
-    Telefon      NVARCHAR(20)  NULL,
-    Email        NVARCHAR(100) NOT NULL,               -- Giriş için kullanılacak
-    SifreHash    NVARCHAR(255) NOT NULL,               -- Şifre düz metin saklanmaz!
-    OlusturmaTarihi DATETIME   NOT NULL DEFAULT GETDATE(),
+    HastaID         INT          NOT NULL IDENTITY(1,1),
+    KullaniciID     INT          NOT NULL,               -- Kullaniciler tablosuna bağlı
+    TCKimlik        NVARCHAR(11) NULL,
+    DogumTarihi     DATE         NULL,
+    Cinsiyet        NVARCHAR(10) NULL,                   -- 'Erkek' veya 'Kadın'
+    Telefon         NVARCHAR(20) NULL,
 
     CONSTRAINT PK_Hastalar PRIMARY KEY (HastaID),
-    CONSTRAINT UQ_Hastalar_Email UNIQUE (Email)        -- Aynı email 2 kez kayıt olamaz
+    CONSTRAINT FK_Hastalar_Kullaniciler
+        FOREIGN KEY (KullaniciID) REFERENCES Kullaniciler(KullaniciID),
+    CONSTRAINT UQ_Hastalar_KullaniciID UNIQUE (KullaniciID) -- 1 kullanıcı = 1 hasta profili
 );
 
+
 -- ============================================================
--- TABLO 4: Doktor Çalışma Saatleri
+-- TABLO 4: Doktorlar (doktorlara özgü ek bilgiler)
+-- Her doktorun Kullaniciler tablosunda bir kaydı olmak zorunda.
+-- ============================================================
+CREATE TABLE Doktorlar (
+    DoktorID    INT          NOT NULL IDENTITY(1,1),
+    KullaniciID INT          NOT NULL,                   -- Kullaniciler tablosuna bağlı
+    UzmanlikID  INT          NOT NULL,                   -- Hangi uzmanlık alanında?
+    Telefon     NVARCHAR(20) NULL,
+
+    CONSTRAINT PK_Doktorlar PRIMARY KEY (DoktorID),
+    CONSTRAINT FK_Doktorlar_Kullaniciler
+        FOREIGN KEY (KullaniciID) REFERENCES Kullaniciler(KullaniciID),
+    CONSTRAINT FK_Doktorlar_Uzmanliklar
+        FOREIGN KEY (UzmanlikID) REFERENCES Uzmanliklar(UzmanlikID),
+    CONSTRAINT UQ_Doktorlar_KullaniciID UNIQUE (KullaniciID) -- 1 kullanıcı = 1 doktor profili
+);
+
+
+-- ============================================================
+-- TABLO 5: Doktor Çalışma Saatleri
 -- Hangi doktor, hangi gün, saat kaçtan kaça çalışıyor?
 -- ============================================================
 CREATE TABLE DoktorCalisma (
     CalismaID     INT          NOT NULL IDENTITY(1,1),
     DoktorID      INT          NOT NULL,
-    Gun           NVARCHAR(15) NOT NULL,               -- 'Pazartesi', 'Salı' vb.
-    BaslangicSaat TIME         NOT NULL,               -- 09:00
-    BitisSaat     TIME         NOT NULL,               -- 17:00
+    Gun           NVARCHAR(15) NOT NULL,                 -- 'Pazartesi', 'Salı' vb.
+    BaslangicSaat TIME         NOT NULL,                 -- 09:00
+    BitisSaat     TIME         NOT NULL,                 -- 17:00
 
     CONSTRAINT PK_DoktorCalisma PRIMARY KEY (CalismaID),
     CONSTRAINT FK_DoktorCalisma_Doktorlar
         FOREIGN KEY (DoktorID) REFERENCES Doktorlar(DoktorID)
 );
 
+
 -- ============================================================
--- TABLO 5: Randevular
--- (Hasta + Doktor + Tarih/Saat birleşimi)
+-- TABLO 6: Randevular
 -- ============================================================
 CREATE TABLE Randevular (
-    RandevuID    INT           NOT NULL IDENTITY(1,1),
-    HastaID      INT           NOT NULL,               -- Hangi hasta?
-    DoktorID     INT           NOT NULL,               -- Hangi doktor?
-    RandevuTarihi DATE         NOT NULL,               -- Hangi gün?
-    RandevuSaati TIME          NOT NULL,               -- Saat kaçta?
-    Durum        NVARCHAR(20)  NOT NULL DEFAULT 'Beklemede',
-                                                       -- Beklemede / Onaylandı /
-                                                       -- İptal / Tamamlandı
-    Notlar       NVARCHAR(500) NULL,                   -- Hasta veya doktor notu
-    OlusturmaTarihi DATETIME   NOT NULL DEFAULT GETDATE(),
+    RandevuID       INT           NOT NULL IDENTITY(1,1),
+    HastaID         INT           NOT NULL,              -- Hangi hasta?
+    DoktorID        INT           NOT NULL,              -- Hangi doktor?
+    RandevuTarihi   DATE          NOT NULL,              -- Hangi gün?
+    RandevuSaati    TIME          NOT NULL,              -- Saat kaçta?
+    Durum           NVARCHAR(20)  NOT NULL DEFAULT 'Beklemede',
+                                                         -- Beklemede / Onaylandı / İptal / Tamamlandı
+    Notlar          NVARCHAR(500) NULL,
+    OlusturmaTarihi DATETIME      NOT NULL DEFAULT GETDATE(),
 
     CONSTRAINT PK_Randevular PRIMARY KEY (RandevuID),
     CONSTRAINT FK_Randevular_Hastalar

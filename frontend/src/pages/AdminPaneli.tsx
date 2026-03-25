@@ -9,41 +9,44 @@ const hastaDetaylari: Record<string, { telefon: string; email: string; dogumTari
 }
 
 const baslangicRandevular = [
-  { id: 1, hasta: 'Ali Veli', doktor: 'Dr. Kubra Kalan', uzmanlik: 'Kardiyoloji', tarih: '2026-04-01', saat: '09:00', durum: 'Onaylandi' },
-  { id: 2, hasta: 'Ayse Yildiz', doktor: 'Dr. Beyza Nur Cift', uzmanlik: 'Ortopedi', tarih: '2026-04-01', saat: '10:00', durum: 'Beklemede' },
-  { id: 3, hasta: 'Mehmet Kaya', doktor: 'Dr. Doga Guler', uzmanlik: 'Psikiyatri', tarih: '2026-04-02', saat: '11:00', durum: 'Beklemede' },
-  { id: 4, hasta: 'Fatma Demir', doktor: 'Dr. Kubra Kalan', uzmanlik: 'Kardiyoloji', tarih: '2026-03-20', saat: '14:00', durum: 'Tamamlandi' },
+  { id: 1, hasta: 'Ali Veli',    doktor: 'Dr. Kubra Kalan',    uzmanlik: 'Kardiyoloji', tarih: '2026-04-01', saat: '09:00', durum: 'Onaylandi' },
+  { id: 2, hasta: 'Ayse Yildiz', doktor: 'Dr. Beyza Nur Cift', uzmanlik: 'Ortopedi',    tarih: '2026-04-01', saat: '10:00', durum: 'Beklemede' },
+  { id: 3, hasta: 'Mehmet Kaya', doktor: 'Dr. Doga Guler',     uzmanlik: 'Psikiyatri',  tarih: '2026-04-02', saat: '11:00', durum: 'Beklemede' },
+  { id: 4, hasta: 'Fatma Demir', doktor: 'Dr. Kubra Kalan',    uzmanlik: 'Kardiyoloji', tarih: '2026-03-20', saat: '14:00', durum: 'Tamamlandi' },
 ]
 
 const baslangicDoktorlar = [
-  { id: 1, ad: 'Dr. Kubra Kalan', uzmanlik: 'Kardiyoloji' },
-  { id: 2, ad: 'Dr. Beyza Nur Cift', uzmanlik: 'Ortopedi' },
-  { id: 3, ad: 'Dr. Doga Guler', uzmanlik: 'Psikiyatri' },
+  { id: 1, ad: 'Kubra',    soyad: 'Kalan',    email: 'kubra.kalan@hastane.com',    uzmanlik: 'Kardiyoloji', telefon: '0532 111 11 11' },
+  { id: 2, ad: 'Beyza Nur',soyad: 'Cift',     email: 'beyza.cift@hastane.com',     uzmanlik: 'Ortopedi',    telefon: '0541 222 22 22' },
+  { id: 3, ad: 'Doga',     soyad: 'Guler',    email: 'doga.guler@hastane.com',     uzmanlik: 'Psikiyatri',  telefon: '0555 333 33 33' },
+]
+
+const baslangicYoneticiler = [
+  { id: 1, ad: 'Sistem', soyad: 'Yoneticisi', email: 'admin@hastane.com' },
 ]
 
 const durumRenk: Record<string, string> = {
-  'Onaylandi': 'bg-green-100 text-green-700',
-  'Beklemede': 'bg-yellow-100 text-yellow-700',
+  'Onaylandi':  'bg-green-100 text-green-700',
+  'Beklemede':  'bg-yellow-100 text-yellow-700',
   'Tamamlandi': 'bg-gray-100 text-gray-600',
-  'Iptal': 'bg-red-100 text-red-700',
+  'Iptal':      'bg-red-100 text-red-700',
 }
 
-const durumEtiket: Record<string, string> = {
-  'Onaylandi': 'Onaylandi',
-  'Beklemede': 'Beklemede',
-  'Tamamlandi': 'Tamamlandi',
-  'Iptal': 'Iptal',
-}
+const bos = { ad: '', soyad: '', email: '', sifre: '', uzmanlik: '', telefon: '' }
+const bosYonetici = { ad: '', soyad: '', email: '', sifre: '' }
 
 export default function AdminPaneli() {
-  const [randevular, setRandevular] = useState(baslangicRandevular)
-  const [doktorlar, setDoktorlar] = useState(baslangicDoktorlar)
-  const [aramaMetni, setAramaMetni] = useState('')
-  const [durumFiltre, setDurumFiltre] = useState('Tumu')
-  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar'>('randevular')
-  const [secilenHasta, setSecilenHasta] = useState<string | null>(null)
-  const [yeniDoktor, setYeniDoktor] = useState({ ad: '', uzmanlik: '' })
-  const [doktorFormu, setDoktorFormu] = useState(false)
+  const [randevular,    setRandevular]    = useState(baslangicRandevular)
+  const [doktorlar,     setDoktorlar]     = useState(baslangicDoktorlar)
+  const [yoneticiler,   setYoneticiler]   = useState(baslangicYoneticiler)
+  const [aramaMetni,    setAramaMetni]    = useState('')
+  const [durumFiltre,   setDurumFiltre]   = useState('Tumu')
+  const [aktifSekme,    setAktifSekme]    = useState<'randevular' | 'doktorlar' | 'yoneticiler'>('randevular')
+  const [secilenHasta,  setSecilenHasta]  = useState<string | null>(null)
+  const [doktorFormu,   setDoktorFormu]   = useState(false)
+  const [yoneticiFormu, setYoneticiFormu] = useState(false)
+  const [yeniDoktor,    setYeniDoktor]    = useState(bos)
+  const [yeniYonetici,  setYeniYonetici]  = useState(bosYonetici)
 
   const randevuGuncelle = (id: number, yeniDurum: string) => {
     setRandevular(randevular.map(r => r.id === id ? { ...r, durum: yeniDurum } : r))
@@ -58,10 +61,22 @@ export default function AdminPaneli() {
   }
 
   const doktorEkle = () => {
-    if (!yeniDoktor.ad || !yeniDoktor.uzmanlik) return
+    if (!yeniDoktor.ad || !yeniDoktor.soyad || !yeniDoktor.email || !yeniDoktor.sifre || !yeniDoktor.uzmanlik) return
     setDoktorlar([...doktorlar, { id: Date.now(), ...yeniDoktor }])
-    setYeniDoktor({ ad: '', uzmanlik: '' })
+    setYeniDoktor(bos)
     setDoktorFormu(false)
+  }
+
+  const yoneticiSil = (id: number) => {
+    if (yoneticiler.length === 1) return  // en az 1 yonetici olmali
+    setYoneticiler(yoneticiler.filter(y => y.id !== id))
+  }
+
+  const yoneticiEkle = () => {
+    if (!yeniYonetici.ad || !yeniYonetici.soyad || !yeniYonetici.email || !yeniYonetici.sifre) return
+    setYoneticiler([...yoneticiler, { id: Date.now(), ad: yeniYonetici.ad, soyad: yeniYonetici.soyad, email: yeniYonetici.email }])
+    setYeniYonetici(bosYonetici)
+    setYoneticiFormu(false)
   }
 
   const filtreliRandevular = randevular.filter(r => {
@@ -91,11 +106,11 @@ export default function AdminPaneli() {
             </div>
             <div className="flex flex-col gap-3">
               {[
-                { etiket: 'TC Kimlik', deger: hastaDetaylari[secilenHasta].tcKimlik },
+                { etiket: 'TC Kimlik',    deger: hastaDetaylari[secilenHasta].tcKimlik },
                 { etiket: 'Dogum Tarihi', deger: hastaDetaylari[secilenHasta].dogumTarihi },
-                { etiket: 'Cinsiyet', deger: hastaDetaylari[secilenHasta].cinsiyet },
-                { etiket: 'Telefon', deger: hastaDetaylari[secilenHasta].telefon },
-                { etiket: 'E-posta', deger: hastaDetaylari[secilenHasta].email },
+                { etiket: 'Cinsiyet',     deger: hastaDetaylari[secilenHasta].cinsiyet },
+                { etiket: 'Telefon',      deger: hastaDetaylari[secilenHasta].telefon },
+                { etiket: 'E-posta',      deger: hastaDetaylari[secilenHasta].email },
               ].map(({ etiket, deger }) => (
                 <div key={etiket} className="flex justify-between py-2 border-b border-gray-50">
                   <span className="text-gray-500 text-sm">{etiket}</span>
@@ -131,10 +146,10 @@ export default function AdminPaneli() {
         {/* UST KARTLAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { icon: '👥', sayi: '24', etiket: 'Toplam Hasta' },
-            { icon: '👨‍⚕️', sayi: String(doktorlar.length), etiket: 'Toplam Doktor' },
-            { icon: '📅', sayi: String(randevular.length), etiket: 'Toplam Randevu' },
-            { icon: '⏳', sayi: String(randevular.filter(r => r.durum === 'Beklemede').length), etiket: 'Bekleyen' },
+            { icon: '👥',    sayi: '24',                                                          etiket: 'Toplam Hasta'  },
+            { icon: '👨‍⚕️', sayi: String(doktorlar.length),                                     etiket: 'Toplam Doktor' },
+            { icon: '📅',    sayi: String(randevular.length),                                     etiket: 'Toplam Randevu'},
+            { icon: '⏳',    sayi: String(randevular.filter(r => r.durum === 'Beklemede').length), etiket: 'Bekleyen'      },
           ].map((k) => (
             <div key={k.etiket} className="bg-white rounded-xl p-5 shadow-sm flex items-center gap-4">
               <span className="text-3xl">{k.icon}</span>
@@ -148,18 +163,17 @@ export default function AdminPaneli() {
 
         {/* SEKMELER */}
         <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setAktifSekme('randevular')}
-            className={`px-5 py-2 rounded-lg font-medium text-sm transition ${aktifSekme === 'randevular' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
-          >
-            Randevular
-          </button>
-          <button
-            onClick={() => setAktifSekme('doktorlar')}
-            className={`px-5 py-2 rounded-lg font-medium text-sm transition ${aktifSekme === 'doktorlar' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
-          >
-            Doktorlar
-          </button>
+          {(['randevular', 'doktorlar', 'yoneticiler'] as const).map((sekme) => (
+            <button
+              key={sekme}
+              onClick={() => setAktifSekme(sekme)}
+              className={`px-5 py-2 rounded-lg font-medium text-sm transition capitalize ${
+                aktifSekme === sekme ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {sekme === 'randevular' ? 'Randevular' : sekme === 'doktorlar' ? 'Doktorlar' : 'Yoneticiler'}
+            </button>
+          ))}
         </div>
 
         {/* RANDEVULAR */}
@@ -210,7 +224,7 @@ export default function AdminPaneli() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs px-3 py-1 rounded-full font-medium ${durumRenk[r.durum]}`}>
-                      {durumEtiket[r.durum]}
+                      {r.durum}
                     </span>
                     {r.durum === 'Beklemede' && (
                       <button
@@ -249,7 +263,7 @@ export default function AdminPaneli() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-800">Doktor Listesi</h2>
               <button
-                onClick={() => setDoktorFormu(!doktorFormu)}
+                onClick={() => { setDoktorFormu(!doktorFormu); setYeniDoktor(bos) }}
                 className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
               >
                 + Yeni Doktor Ekle
@@ -257,47 +271,91 @@ export default function AdminPaneli() {
             </div>
 
             {doktorFormu && (
-              <div className="bg-blue-50 rounded-xl p-4 mb-4 flex gap-3 items-end flex-wrap">
-                <div className="flex-1 min-w-40">
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Ad Soyad</label>
-                  <input
-                    type="text"
-                    placeholder="Dr. Ad Soyad"
-                    value={yeniDoktor.ad}
-                    onChange={e => setYeniDoktor({ ...yeniDoktor, ad: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
+              <div className="bg-blue-50 rounded-xl p-4 mb-4">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Ad</label>
+                    <input
+                      type="text"
+                      placeholder="Adı"
+                      value={yeniDoktor.ad}
+                      onChange={e => setYeniDoktor({ ...yeniDoktor, ad: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Soyad</label>
+                    <input
+                      type="text"
+                      placeholder="Soyadı"
+                      value={yeniDoktor.soyad}
+                      onChange={e => setYeniDoktor({ ...yeniDoktor, soyad: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">E-posta</label>
+                    <input
+                      type="email"
+                      placeholder="doktor@hastane.com"
+                      value={yeniDoktor.email}
+                      onChange={e => setYeniDoktor({ ...yeniDoktor, email: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Gecici Sifre</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={yeniDoktor.sifre}
+                      onChange={e => setYeniDoktor({ ...yeniDoktor, sifre: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Uzmanlik</label>
+                    <select
+                      value={yeniDoktor.uzmanlik}
+                      onChange={e => setYeniDoktor({ ...yeniDoktor, uzmanlik: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600"
+                    >
+                      <option value="">Seciniz</option>
+                      <option>Kardiyoloji</option>
+                      <option>Ortopedi</option>
+                      <option>Noroloji</option>
+                      <option>Psikiyatri</option>
+                      <option>Goz Hastaliklari</option>
+                      <option>Dahiliye</option>
+                      <option>Cocuk Sagligi</option>
+                      <option>Dermatoloji</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Telefon (opsiyonel)</label>
+                    <input
+                      type="tel"
+                      placeholder="05XX XXX XX XX"
+                      value={yeniDoktor.telefon}
+                      onChange={e => setYeniDoktor({ ...yeniDoktor, telefon: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-40">
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Uzmanlik</label>
-                  <select
-                    value={yeniDoktor.uzmanlik}
-                    onChange={e => setYeniDoktor({ ...yeniDoktor, uzmanlik: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600"
+                <div className="flex gap-2">
+                  <button
+                    onClick={doktorEkle}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
                   >
-                    <option value="">Seciniz</option>
-                    <option>Kardiyoloji</option>
-                    <option>Ortopedi</option>
-                    <option>Noroloji</option>
-                    <option>Psikiyatri</option>
-                    <option>Goz Hastaliklari</option>
-                    <option>Dahiliye</option>
-                    <option>Cocuk Sagligi</option>
-                    <option>Dermatoloji</option>
-                  </select>
+                    Ekle
+                  </button>
+                  <button
+                    onClick={() => { setDoktorFormu(false); setYeniDoktor(bos) }}
+                    className="text-gray-400 hover:text-gray-600 px-4 py-2 text-sm"
+                  >
+                    Vazgec
+                  </button>
                 </div>
-                <button
-                  onClick={doktorEkle}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
-                >
-                  Ekle
-                </button>
-                <button
-                  onClick={() => setDoktorFormu(false)}
-                  className="text-gray-400 hover:text-gray-600 px-2 py-2 text-sm"
-                >
-                  Vazgec
-                </button>
               </div>
             )}
 
@@ -307,13 +365,110 @@ export default function AdminPaneli() {
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">👨‍⚕️</span>
                     <div>
-                      <p className="font-semibold text-gray-800 text-sm">{d.ad}</p>
-                      <p className="text-gray-500 text-xs">{d.uzmanlik}</p>
+                      <p className="font-semibold text-gray-800 text-sm">Dr. {d.ad} {d.soyad}</p>
+                      <p className="text-gray-500 text-xs">{d.uzmanlik} · {d.email}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => doktorSil(d.id)}
                     className="text-xs bg-red-100 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200"
+                  >
+                    Kaldir
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* YONETİCİLER */}
+        {aktifSekme === 'yoneticiler' && (
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Yonetici Listesi</h2>
+              <button
+                onClick={() => { setYoneticiFormu(!yoneticiFormu); setYeniYonetici(bosYonetici) }}
+                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                + Yeni Yonetici Ekle
+              </button>
+            </div>
+
+            {yoneticiFormu && (
+              <div className="bg-blue-50 rounded-xl p-4 mb-4">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Ad</label>
+                    <input
+                      type="text"
+                      placeholder="Adı"
+                      value={yeniYonetici.ad}
+                      onChange={e => setYeniYonetici({ ...yeniYonetici, ad: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Soyad</label>
+                    <input
+                      type="text"
+                      placeholder="Soyadı"
+                      value={yeniYonetici.soyad}
+                      onChange={e => setYeniYonetici({ ...yeniYonetici, soyad: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">E-posta</label>
+                    <input
+                      type="email"
+                      placeholder="yonetici@hastane.com"
+                      value={yeniYonetici.email}
+                      onChange={e => setYeniYonetici({ ...yeniYonetici, email: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Gecici Sifre</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={yeniYonetici.sifre}
+                      onChange={e => setYeniYonetici({ ...yeniYonetici, sifre: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={yoneticiEkle}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
+                  >
+                    Ekle
+                  </button>
+                  <button
+                    onClick={() => { setYoneticiFormu(false); setYeniYonetici(bosYonetici) }}
+                    className="text-gray-400 hover:text-gray-600 px-4 py-2 text-sm"
+                  >
+                    Vazgec
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              {yoneticiler.map((y) => (
+                <div key={y.id} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-blue-200 transition">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🛡️</span>
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{y.ad} {y.soyad}</p>
+                      <p className="text-gray-500 text-xs">{y.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => yoneticiSil(y.id)}
+                    disabled={yoneticiler.length === 1}
+                    className="text-xs bg-red-100 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Kaldir
                   </button>
