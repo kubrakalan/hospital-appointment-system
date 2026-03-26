@@ -1,8 +1,38 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../ThemeContext'
+import { useAuth } from '../AuthContext'
+import { api } from '../api'
 
 export default function Giris() {
   const { theme, toggle } = useTheme()
+  const { girisYap } = useAuth()
+  const navigate = useNavigate()
+
+  const [email, setEmail] = useState('')
+  const [sifre, setSifre] = useState('')
+  const [hata, setHata] = useState('')
+  const [yukleniyor, setYukleniyor] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setHata('')
+    setYukleniyor(true)
+
+    try {
+      const veri = await api.login(email, sifre)
+      girisYap(veri.token, veri.kullanici)
+
+      // Role göre panele yönlendir
+      if (veri.kullanici.rol === 'Admin') navigate('/admin')
+      else if (veri.kullanici.rol === 'Doktor') navigate('/doktor')
+      else navigate('/hasta')
+    } catch (err: unknown) {
+      setHata(err instanceof Error ? err.message : 'Giriş başarısız')
+    } finally {
+      setYukleniyor(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors">
@@ -15,7 +45,6 @@ export default function Giris() {
         </Link>
 
         <div className="flex items-center gap-3">
-          {/* Karanlık/Aydınlık mod butonu */}
           <button
             onClick={toggle}
             className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg"
@@ -23,15 +52,12 @@ export default function Giris() {
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-
-          {/* Kayıt Ol butonu */}
           <span className="text-gray-500 dark:text-gray-400 text-sm hidden sm:block">Hesabın yok mu?</span>
           <Link
             to="/kayit"
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition"
           >
-            Kayıt Ol
-            <span>→</span>
+            Kayıt Ol <span>→</span>
           </Link>
         </div>
       </nav>
@@ -46,34 +72,43 @@ export default function Giris() {
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Hesabınıza giriş yapın</p>
           </div>
 
-          <form className="flex flex-col gap-4">
+          {hata && (
+            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg px-4 py-3 text-sm mb-4">
+              {hata}
+            </div>
+          )}
+
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                E-posta
-              </label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">E-posta</label>
               <input
                 type="email"
                 placeholder="ornek@email.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
                 className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-300 placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">
-                Şifre
-              </label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Şifre</label>
               <input
                 type="password"
                 placeholder="••••••••"
+                value={sifre}
+                onChange={e => setSifre(e.target.value)}
+                required
                 className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-300 placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
 
             <button
               type="submit"
-              className="bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium mt-2 transition"
+              disabled={yukleniyor}
+              className="bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium mt-2 transition disabled:opacity-60"
             >
-              Giriş Yap
+              {yukleniyor ? 'Giriş yapılıyor...' : 'Giriş Yap'}
             </button>
           </form>
 

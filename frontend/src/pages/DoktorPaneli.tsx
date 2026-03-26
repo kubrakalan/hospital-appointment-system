@@ -1,12 +1,8 @@
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../ThemeContext'
-
-const randevular = [
-  { id: 1, hasta: 'Ali Veli', tarih: '2026-04-01', saat: '09:00', durum: 'Onaylandı', not: '' },
-  { id: 2, hasta: 'Ayşe Yıldız', tarih: '2026-04-01', saat: '10:00', durum: 'Beklemede', not: '' },
-  { id: 3, hasta: 'Mehmet Kaya', tarih: '2026-04-02', saat: '11:00', durum: 'Beklemede', not: '' },
-  { id: 4, hasta: 'Fatma Demir', tarih: '2026-03-20', saat: '14:00', durum: 'Tamamlandı', not: 'Kontrol önerildi' },
-]
+import { useAuth } from '../AuthContext'
+import { api } from '../api'
 
 const durumRenk: Record<string, string> = {
   'Onaylandı': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -15,13 +11,39 @@ const durumRenk: Record<string, string> = {
   'İptal': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 }
 
+interface Randevu {
+  RandevuID: number; HastaAdi: string; RandevuTarihi: string
+  RandevuSaati: string; Durum: string; Notlar: string | null
+}
+
 export default function DoktorPaneli() {
   const { theme, toggle } = useTheme()
+  const { kullanici, cikisYap } = useAuth()
+  const navigate = useNavigate()
+  const [randevular, setRandevular] = useState<Randevu[]>([])
+  const [yukleniyor, setYukleniyor] = useState(true)
+
+  useEffect(() => {
+    api.doktorRandevular().then(setRandevular).catch(() => {}).finally(() => setYukleniyor(false))
+  }, [])
+
+  function cikis() { cikisYap(); navigate('/giris') }
+
+  async function durumGuncelle(id: number, durum: string) {
+    try {
+      await api.doktorRandevuDurum(id, durum)
+      setRandevular(prev => prev.map(r => r.RandevuID === id ? { ...r, Durum: durum } : r))
+    } catch { }
+  }
+
+  const bugun = new Date().toISOString().split('T')[0]
+  const bugunRandevu = randevular.filter(r => r.RandevuTarihi.split('T')[0] === bugun).length
+  const bekleyen = randevular.filter(r => r.Durum === 'Beklemede').length
+  const tamamlanan = randevular.filter(r => r.Durum === 'Tamamlandı').length
+  const iptalEdilen = randevular.filter(r => r.Durum === 'İptal').length
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-
-      {/* NAVBAR */}
       <nav className="bg-white dark:bg-gray-800 shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <span className="text-2xl">🏥</span>
@@ -29,35 +51,24 @@ export default function DoktorPaneli() {
         </Link>
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <span className="text-gray-600 dark:text-gray-300 font-medium text-sm hidden sm:block truncate">
-            👨‍⚕️ Dr. Kübra Kalan
+            👨‍⚕️ Dr. {kullanici?.ad} {kullanici?.soyad}
           </span>
-          <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full font-medium hidden sm:block">
-            Kardiyoloji
-          </span>
-          <button
-            onClick={toggle}
-            className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg"
-            title={theme === 'dark' ? 'Aydınlık mod' : 'Karanlık mod'}
-          >
+          <button onClick={toggle} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <Link to="/" className="text-red-500 hover:text-red-600 text-sm font-medium shrink-0">
-            Çıkış Yap
-          </Link>
+          <button onClick={cikis} className="text-red-500 hover:text-red-600 text-sm font-medium shrink-0">Çıkış Yap</button>
         </div>
       </nav>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-8 py-10">
-
         <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-8">Doktor Paneli</h1>
 
-        {/* ÜST KARTLAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
           {[
-            { icon: '📅', sayi: '3', etiket: 'Bugünkü Randevu' },
-            { icon: '⏳', sayi: '2', etiket: 'Bekleyen' },
-            { icon: '✅', sayi: '1', etiket: 'Tamamlanan' },
-            { icon: '❌', sayi: '0', etiket: 'İptal Edilen' },
+            { icon: '📅', sayi: bugunRandevu, etiket: 'Bugünkü Randevu' },
+            { icon: '⏳', sayi: bekleyen, etiket: 'Bekleyen' },
+            { icon: '✅', sayi: tamamlanan, etiket: 'Tamamlanan' },
+            { icon: '❌', sayi: iptalEdilen, etiket: 'İptal Edilen' },
           ].map((k) => (
             <div key={k.etiket} className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 shadow-sm flex items-center gap-3 sm:gap-4">
               <span className="text-2xl sm:text-3xl">{k.icon}</span>
@@ -69,110 +80,66 @@ export default function DoktorPaneli() {
           ))}
         </div>
 
-        {/* RANDEVU LİSTESİ */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">📋 Randevu Listesi</h2>
 
-          {/* MASAÜSTÜ — tablo görünümü */}
-          <div className="hidden md:block">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-700">
-                  <th className="text-left text-sm text-gray-500 dark:text-gray-400 font-medium pb-3">Hasta</th>
-                  <th className="text-left text-sm text-gray-500 dark:text-gray-400 font-medium pb-3">Tarih</th>
-                  <th className="text-left text-sm text-gray-500 dark:text-gray-400 font-medium pb-3">Saat</th>
-                  <th className="text-left text-sm text-gray-500 dark:text-gray-400 font-medium pb-3">Durum</th>
-                  <th className="text-left text-sm text-gray-500 dark:text-gray-400 font-medium pb-3">İşlem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {randevular.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-                    <td className="py-4">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">👤</span>
-                        <span className="font-medium text-gray-800 dark:text-gray-100 text-sm">{r.hasta}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 text-gray-600 dark:text-gray-300 text-sm">{r.tarih}</td>
-                    <td className="py-4 text-gray-600 dark:text-gray-300 text-sm">{r.saat}</td>
-                    <td className="py-4">
-                      <span className={`text-xs px-3 py-1 rounded-full font-medium ${durumRenk[r.durum]}`}>
-                        {r.durum}
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <div className="flex gap-2">
-                        {r.durum === 'Beklemede' && (
-                          <>
-                            <button className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">
-                              Onayla
-                            </button>
-                            <button className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 px-3 py-1 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition">
-                              İptal
-                            </button>
-                          </>
-                        )}
-                        {r.durum === 'Onaylandı' && (
-                          <button className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition">
-                            Tamamla
-                          </button>
-                        )}
-                        {r.durum === 'Tamamlandı' && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{r.not || '—'}</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* MOBİL — kart görünümü */}
-          <div className="md:hidden flex flex-col gap-3">
-            {randevular.map((r) => (
-              <div
-                key={r.id}
-                className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 transition"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">👤</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{r.hasta}</span>
-                  </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${durumRenk[r.durum]}`}>
-                    {r.durum}
-                  </span>
-                </div>
-                <p className="text-gray-500 dark:text-gray-400 text-xs mb-3 pl-7">
-                  {r.tarih} · {r.saat}
-                </p>
-                <div className="flex gap-2 pl-7">
-                  {r.durum === 'Beklemede' && (
-                    <>
-                      <button className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition">
-                        Onayla
-                      </button>
-                      <button className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition">
-                        İptal
-                      </button>
-                    </>
-                  )}
-                  {r.durum === 'Onaylandı' && (
-                    <button className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition">
-                      Tamamla
-                    </button>
-                  )}
-                  {r.durum === 'Tamamlandı' && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{r.not || '—'}</span>
-                  )}
-                </div>
+          {yukleniyor ? <p className="text-gray-400 text-sm">Yükleniyor...</p>
+          : randevular.length === 0 ? <p className="text-gray-400 text-sm">Henüz randevunuz yok.</p>
+          : (
+            <>
+              <div className="hidden md:block">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-gray-700">
+                      {['Hasta', 'Tarih', 'Saat', 'Durum', 'İşlem'].map(h => (
+                        <th key={h} className="text-left text-sm text-gray-500 dark:text-gray-400 font-medium pb-3">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {randevular.map((r) => (
+                      <tr key={r.RandevuID} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                        <td className="py-4"><div className="flex items-center gap-3"><span>👤</span><span className="font-medium text-gray-800 dark:text-gray-100 text-sm">{r.HastaAdi}</span></div></td>
+                        <td className="py-4 text-gray-600 dark:text-gray-300 text-sm">{r.RandevuTarihi.split('T')[0]}</td>
+                        <td className="py-4 text-gray-600 dark:text-gray-300 text-sm">{String(r.RandevuSaati).substring(0, 5)}</td>
+                        <td className="py-4"><span className={`text-xs px-3 py-1 rounded-full font-medium ${durumRenk[r.Durum] ?? ''}`}>{r.Durum}</span></td>
+                        <td className="py-4">
+                          <div className="flex gap-2">
+                            {r.Durum === 'Beklemede' && <>
+                              <button onClick={() => durumGuncelle(r.RandevuID, 'Onaylandı')} className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">Onayla</button>
+                              <button onClick={() => durumGuncelle(r.RandevuID, 'İptal')} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1 rounded-lg hover:bg-red-200 transition">İptal</button>
+                            </>}
+                            {r.Durum === 'Onaylandı' && <button onClick={() => durumGuncelle(r.RandevuID, 'Tamamlandı')} className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-200 transition">Tamamla</button>}
+                            {r.Durum === 'Tamamlandı' && <span className="text-xs text-gray-400">{r.Notlar || '—'}</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
-        </div>
 
+              <div className="md:hidden flex flex-col gap-3">
+                {randevular.map((r) => (
+                  <div key={r.RandevuID} className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 transition">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2"><span>👤</span><span className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{r.HastaAdi}</span></div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${durumRenk[r.Durum] ?? ''}`}>{r.Durum}</span>
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs mb-3 pl-7">{r.RandevuTarihi.split('T')[0]} · {String(r.RandevuSaati).substring(0, 5)}</p>
+                    <div className="flex gap-2 pl-7">
+                      {r.Durum === 'Beklemede' && <>
+                        <button onClick={() => durumGuncelle(r.RandevuID, 'Onaylandı')} className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition">Onayla</button>
+                        <button onClick={() => durumGuncelle(r.RandevuID, 'İptal')} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">İptal</button>
+                      </>}
+                      {r.Durum === 'Onaylandı' && <button onClick={() => durumGuncelle(r.RandevuID, 'Tamamlandı')} className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition">Tamamla</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
