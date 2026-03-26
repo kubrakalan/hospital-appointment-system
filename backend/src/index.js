@@ -1,0 +1,27 @@
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
+// CORS: Frontend'in (port 5173) bu sunucuya istek atmasına izin ver
+app.use(cors({ origin: /^http:\/\/localhost(:\d+)?$/ }));
+
+// Gelen isteklerin body'sini JSON olarak oku
+app.use(express.json());
+
+// Route'ları bağla
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/randevular', require('./routes/randevular'));
+app.use('/api/doktor', require('./routes/doktor'));
+app.use('/api/admin', require('./routes/admin'));
+
+// Test endpoint'i — sunucunun çalışıp çalışmadığını kontrol etmek için
+app.get('/api/ping', (_req, res) => {
+  res.json({ mesaj: 'Backend çalışıyor!' });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Sunucu http://localhost:${PORT} adresinde çalışıyor`);
+});
