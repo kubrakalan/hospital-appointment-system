@@ -24,6 +24,25 @@ const durumRenk: Record<string, string> = {
   'İptal': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 }
 
+interface AdminHasta {
+  HastaID: number
+  Ad: string
+  Soyad: string
+  Email: string
+  Telefon: string | null
+  TCKimlik: string | null
+  DogumTarihi: string | null
+  Cinsiyet: string | null
+  KanGrubu: string | null
+  KronikHastaliklar: string | null
+  Alerjiler: string | null
+  SurekliIlaclar: string | null
+  AcilKisiAd: string | null
+  AcilKisiTelefon: string | null
+  Adres: string | null
+  ToplamRandevu: number
+}
+
 interface AdminRandevu {
   RandevuID: number
   RandevuTarihi: string
@@ -63,7 +82,9 @@ export default function AdminPaneli() {
   const [randevular, setRandevular] = useState<AdminRandevu[]>([])
   const [doktorlar, setDoktorlar] = useState<AdminDoktor[]>([])
   const [yoneticiler, setYoneticiler] = useState<Yonetici[]>([])
-  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'yoneticiler' | 'istatistikler'>('randevular')
+  const [hastalar, setHastalar] = useState<AdminHasta[]>([])
+  const [acikHastaId, setAcikHastaId] = useState<number | null>(null)
+  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'hastalar' | 'yoneticiler' | 'istatistikler'>('randevular')
   const [gunlukVeri, setGunlukVeri] = useState<{ tarih: string; sayi: number }[]>([])
   const [uzmanlikVeri, setUzmanlikVeri] = useState<{ isim: string; sayi: number }[]>([])
   const [doktorVeri, setDoktorVeri] = useState<{ isim: string; sayi: number }[]>([])
@@ -81,10 +102,11 @@ export default function AdminPaneli() {
   }, [])
 
   async function yukle() {
-    const [ist, r, d, y, g, uz, dok, dur, saat, iptal] = await Promise.all([
+    const [ist, r, d, h, y, g, uz, dok, dur, saat, iptal] = await Promise.all([
       api.adminIstatistikler(),
       api.adminRandevular(),
       api.adminDoktorlar(),
+      api.adminHastalar(),
       api.adminYoneticiler(),
       api.adminGunlukIstatistik(),
       api.adminUzmanlikIstatistik(),
@@ -96,6 +118,7 @@ export default function AdminPaneli() {
     setIstatistik(ist)
     setRandevular(r)
     setDoktorlar(d)
+    setHastalar(h)
     setYoneticiler(y)
     setGunlukVeri(g)
     setUzmanlikVeri(uz)
@@ -188,10 +211,10 @@ export default function AdminPaneli() {
         </div>
 
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-          {(['randevular', 'doktorlar', 'yoneticiler', 'istatistikler'] as const).map((sekme) => (
+          {(['randevular', 'doktorlar', 'hastalar', 'yoneticiler', 'istatistikler'] as const).map((sekme) => (
             <button key={sekme} onClick={() => setAktifSekme(sekme)}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition whitespace-nowrap ${aktifSekme === sekme ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-              {sekme === 'randevular' ? 'Randevular' : sekme === 'doktorlar' ? 'Doktorlar' : sekme === 'yoneticiler' ? 'Yöneticiler' : '📈 İstatistikler'}
+              {sekme === 'randevular' ? 'Randevular' : sekme === 'doktorlar' ? 'Doktorlar' : sekme === 'hastalar' ? 'Hastalar' : sekme === 'yoneticiler' ? 'Yöneticiler' : '📈 İstatistikler'}
             </button>
           ))}
         </div>
@@ -284,6 +307,105 @@ export default function AdminPaneli() {
                     </div>
                   </div>
                   <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition shrink-0">Kaldır</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* HASTALAR */}
+        {aktifSekme === 'hastalar' && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Hasta Listesi</h2>
+            <div className="flex flex-col gap-3">
+              {hastalar.length === 0 && <p className="text-center text-gray-400 py-8">Hasta bulunamadı.</p>}
+              {hastalar.map((h) => (
+                <div key={h.HastaID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                  <button
+                    onClick={() => setAcikHastaId(acikHastaId === h.HastaID ? null : h.HastaID)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-2xl shrink-0">👤</span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{h.Ad} {h.Soyad}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{h.Email} · {h.ToplamRandevu} randevu</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {h.KanGrubu && <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-medium">{h.KanGrubu}</span>}
+                      <span className="text-gray-400 text-xs">{acikHastaId === h.HastaID ? '▲' : '▼'}</span>
+                    </div>
+                  </button>
+
+                  {acikHastaId === h.HastaID && (
+                    <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 pt-4 text-sm">
+
+                        <div>
+                          <p className="text-xs text-gray-400 mb-0.5">TC Kimlik</p>
+                          <p className="text-gray-700 dark:text-gray-200">{h.TCKimlik ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400 mb-0.5">Doğum Tarihi</p>
+                          <p className="text-gray-700 dark:text-gray-200">{h.DogumTarihi ? h.DogumTarihi.substring(0, 10) : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400 mb-0.5">Cinsiyet</p>
+                          <p className="text-gray-700 dark:text-gray-200">{h.Cinsiyet ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400 mb-0.5">Telefon</p>
+                          <p className="text-gray-700 dark:text-gray-200">{h.Telefon ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400 mb-0.5">Kan Grubu</p>
+                          <p className="text-gray-700 dark:text-gray-200">{h.KanGrubu ?? '—'}</p>
+                        </div>
+                        <div className="sm:col-span-1">
+                          <p className="text-xs text-gray-400 mb-0.5">Adres</p>
+                          <p className="text-gray-700 dark:text-gray-200">{h.Adres ?? '—'}</p>
+                        </div>
+
+                        {(h.KronikHastaliklar || h.Alerjiler || h.SurekliIlaclar) && (
+                          <div className="col-span-2 sm:col-span-3 border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
+                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Sağlık Bilgileri</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <p className="text-xs text-gray-400 mb-0.5">Kronik Hastalıklar</p>
+                                <p className="text-gray-700 dark:text-gray-200">{h.KronikHastaliklar ?? '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-0.5">Alerjiler</p>
+                                <p className="text-gray-700 dark:text-gray-200">{h.Alerjiler ?? '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-0.5">Sürekli İlaçlar</p>
+                                <p className="text-gray-700 dark:text-gray-200">{h.SurekliIlaclar ?? '—'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(h.AcilKisiAd || h.AcilKisiTelefon) && (
+                          <div className="col-span-2 sm:col-span-3 border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
+                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Acil İletişim</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-xs text-gray-400 mb-0.5">Kişi</p>
+                                <p className="text-gray-700 dark:text-gray-200">{h.AcilKisiAd ?? '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-0.5">Telefon</p>
+                                <p className="text-gray-700 dark:text-gray-200">{h.AcilKisiTelefon ?? '—'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

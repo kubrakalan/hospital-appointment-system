@@ -308,6 +308,29 @@ router.delete('/doktorlar/:id', async (req, res) => {
   }
 });
 
+// GET /api/admin/hastalar — tüm hasta listesi + profil bilgileri
+router.get('/hastalar', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT
+        h.HastaID,
+        k.Ad, k.Soyad, k.Email,
+        h.Telefon, h.TCKimlik, h.DogumTarihi, h.Cinsiyet,
+        h.KanGrubu, h.KronikHastaliklar, h.Alerjiler, h.SurekliIlaclar,
+        h.AcilKisiAd, h.AcilKisiTelefon, h.Adres,
+        (SELECT COUNT(*) FROM Randevular rv WHERE rv.HastaID = h.HastaID) AS ToplamRandevu
+      FROM Hastalar h
+      JOIN Kullaniciler k ON h.KullaniciID = k.KullaniciID
+      ORDER BY k.Ad, k.Soyad
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
 // GET /api/admin/yoneticiler
 router.get('/yoneticiler', async (req, res) => {
   try {

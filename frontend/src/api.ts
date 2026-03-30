@@ -86,8 +86,13 @@ export const api = {
 
   profilim: () =>
     istek('/randevular/profil'),
-  profilGuncelle: (ad: string, soyad: string, telefon?: string) =>
-    istek('/randevular/profil', { method: 'PATCH', body: JSON.stringify({ ad, soyad, telefon }) }),
+  profilGuncelle: (data: {
+    ad: string; soyad: string; telefon?: string; tcKimlik?: string;
+    dogumTarihi?: string; cinsiyet?: string; kanGrubu?: string;
+    kronikHastaliklar?: string; alerjiler?: string; surekliIlaclar?: string;
+    acilKisiAd?: string; acilKisiTelefon?: string; adres?: string;
+  }) =>
+    istek('/randevular/profil', { method: 'PATCH', body: JSON.stringify(data) }),
 
   bildirimler: () =>
     istek('/bildirimler'),
@@ -135,6 +140,8 @@ export const api = {
     istek('/admin/istatistikler/gunluk', {}, true),
   adminUzmanlikIstatistik: () =>
     istek('/admin/istatistikler/uzmanlik', {}, true),
+  adminHastalar: () =>
+    istek('/admin/hastalar', {}, true),
   adminDoktorIstatistik: () =>
     istek('/admin/istatistikler/doktor', {}, true),
   adminDurumIstatistik: () =>

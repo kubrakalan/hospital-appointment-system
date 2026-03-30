@@ -171,7 +171,10 @@ router.get('/profil', async (req, res) => {
     const sonuc = await pool.request()
       .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
       .query(`
-        SELECT k.Ad, k.Soyad, k.Email, h.Telefon
+        SELECT k.Ad, k.Soyad, k.Email,
+               h.Telefon, h.TCKimlik, h.DogumTarihi, h.Cinsiyet,
+               h.KanGrubu, h.KronikHastaliklar, h.Alerjiler, h.SurekliIlaclar,
+               h.AcilKisiAd, h.AcilKisiTelefon, h.Adres
         FROM Kullaniciler k
         JOIN Hastalar h ON h.KullaniciID = k.KullaniciID
         WHERE k.KullaniciID = @kullaniciId
@@ -190,7 +193,8 @@ router.get('/profil', async (req, res) => {
 // PATCH /api/randevular/profil — profil güncelle
 // ============================================================
 router.patch('/profil', async (req, res) => {
-  const { ad, soyad, telefon } = req.body;
+  const { ad, soyad, telefon, tcKimlik, dogumTarihi, cinsiyet, kanGrubu,
+          kronikHastaliklar, alerjiler, surekliIlaclar, acilKisiAd, acilKisiTelefon, adres } = req.body;
 
   if (!ad || !soyad) {
     return res.status(400).json({ hata: 'Ad ve soyad zorunludur' });
@@ -200,6 +204,13 @@ router.patch('/profil', async (req, res) => {
   }
   if (telefon && !/^[0-9\s\+\-\(\)]{7,15}$/.test(telefon)) {
     return res.status(400).json({ hata: 'Geçersiz telefon numarası' });
+  }
+  if (tcKimlik && !/^\d{11}$/.test(tcKimlik)) {
+    return res.status(400).json({ hata: 'TC Kimlik No 11 haneli olmalıdır' });
+  }
+  const gecerliKanGruplari = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', '0+', '0-'];
+  if (kanGrubu && !gecerliKanGruplari.includes(kanGrubu)) {
+    return res.status(400).json({ hata: 'Geçersiz kan grubu' });
   }
 
   try {
@@ -213,7 +224,31 @@ router.patch('/profil', async (req, res) => {
     await pool.request()
       .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
       .input('telefon', sql.NVarChar, telefon?.trim() || null)
-      .query('UPDATE Hastalar SET Telefon = @telefon WHERE KullaniciID = @kullaniciId');
+      .input('tcKimlik', sql.NVarChar, tcKimlik?.trim() || null)
+      .input('dogumTarihi', sql.Date, dogumTarihi || null)
+      .input('cinsiyet', sql.NVarChar, cinsiyet || null)
+      .input('kanGrubu', sql.NVarChar, kanGrubu || null)
+      .input('kronikHastaliklar', sql.NVarChar, kronikHastaliklar?.trim() || null)
+      .input('alerjiler', sql.NVarChar, alerjiler?.trim() || null)
+      .input('surekliIlaclar', sql.NVarChar, surekliIlaclar?.trim() || null)
+      .input('acilKisiAd', sql.NVarChar, acilKisiAd?.trim() || null)
+      .input('acilKisiTelefon', sql.NVarChar, acilKisiTelefon?.trim() || null)
+      .input('adres', sql.NVarChar, adres?.trim() || null)
+      .query(`
+        UPDATE Hastalar SET
+          Telefon = @telefon,
+          TCKimlik = @tcKimlik,
+          DogumTarihi = @dogumTarihi,
+          Cinsiyet = @cinsiyet,
+          KanGrubu = @kanGrubu,
+          KronikHastaliklar = @kronikHastaliklar,
+          Alerjiler = @alerjiler,
+          SurekliIlaclar = @surekliIlaclar,
+          AcilKisiAd = @acilKisiAd,
+          AcilKisiTelefon = @acilKisiTelefon,
+          Adres = @adres
+        WHERE KullaniciID = @kullaniciId
+      `);
 
     res.json({ mesaj: 'Profil güncellendi' });
   } catch (err) {
