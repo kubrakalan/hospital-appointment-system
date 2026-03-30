@@ -22,6 +22,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/randevular', require('./routes/randevular'));
 app.use('/api/doktor', require('./routes/doktor'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/bildirimler', require('./routes/bildirimler'));
 
 // Test endpoint'i — sunucunun çalışıp çalışmadığını kontrol etmek için
 app.get('/api/ping', (_req, res) => {

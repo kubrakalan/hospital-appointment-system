@@ -8,6 +8,28 @@ function getToken() {
   return localStorage.getItem('token');
 }
 
+function getRefreshToken() {
+  return localStorage.getItem('refreshToken');
+}
+
+async function tokenYenile(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function istek(path: string, options: RequestInit = {}, adminIstek = false) {
   const token = getToken();
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -19,6 +41,34 @@ async function istek(path: string, options: RequestInit = {}, adminIstek = false
       ...options.headers,
     },
   });
+
+  // Token süresi dolmuşsa otomatik yenile ve tekrar dene
+  if (res.status === 401 && path !== '/auth/refresh') {
+    const yenilendi = await tokenYenile();
+    if (yenilendi) {
+      const yeniToken = getToken();
+      const tekrarRes = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(yeniToken ? { Authorization: `Bearer ${yeniToken}` } : {}),
+          ...(adminIstek ? { 'X-Admin-Auth': `Basic ${ADMIN_BASIC_TOKEN}` } : {}),
+          ...options.headers,
+        },
+      });
+      const tekrarData = await tekrarRes.json();
+      if (!tekrarRes.ok) throw new Error(tekrarData.hata || 'Bir hata oluştu');
+      return tekrarData;
+    } else {
+      // Refresh token da geçersiz — çıkış yaptır
+      localStorage.removeItem('token');
+      localStorage.removeItem('kullanici');
+      localStorage.removeItem('refreshToken');
+      window.location.href = '/giris';
+      throw new Error('Oturum süresi doldu');
+    }
+  }
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.hata || 'Bir hata oluştu');
   return data;
@@ -33,6 +83,21 @@ export const api = {
 
   randevularim: () =>
     istek('/randevular/benim'),
+
+  profilim: () =>
+    istek('/randevular/profil'),
+  profilGuncelle: (ad: string, soyad: string, telefon?: string) =>
+    istek('/randevular/profil', { method: 'PATCH', body: JSON.stringify({ ad, soyad, telefon }) }),
+
+  bildirimler: () =>
+    istek('/bildirimler'),
+  bildirimleriOkudu: () =>
+    istek('/bildirimler/okundu', { method: 'PATCH' }),
+
+  sifremiUnuttum: (email: string) =>
+    istek('/auth/sifremi-unuttum', { method: 'POST', body: JSON.stringify({ email }) }),
+  sifreSifirla: (token: string, yeniSifre: string) =>
+    istek('/auth/sifre-sifirla', { method: 'POST', body: JSON.stringify({ token, yeniSifre }) }),
 
   doktorlar: () =>
     istek('/randevular/doktorlar'),

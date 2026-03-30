@@ -37,16 +37,38 @@ router.patch('/randevular/:id/durum', async (req, res) => {
   }
   try {
     const pool = await getPool();
-    await pool.request()
+
+    // Randevuyu güncelle ve hastanın KullaniciID'sini al
+    const sonuc = await pool.request()
       .input('randevuId', sql.Int, req.params.id)
       .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
       .input('durum', sql.NVarChar, durum)
       .query(`
         UPDATE r SET r.Durum = @durum
+        OUTPUT h.KullaniciID AS hastaKullaniciId,
+               kd.Ad + ' ' + kd.Soyad AS doktorAdi,
+               CONVERT(varchar(10), r.RandevuTarihi, 23) AS tarih
         FROM Randevular r
         JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        JOIN Hastalar h ON r.HastaID = h.HastaID
+        JOIN Kullaniciler kd ON d.KullaniciID = kd.KullaniciID
         WHERE r.RandevuID = @randevuId AND d.KullaniciID = @kullaniciId
       `);
+
+    // Hastaya bildirim gönder
+    if (sonuc.recordset.length > 0) {
+      const { hastaKullaniciId, doktorAdi, tarih } = sonuc.recordset[0];
+      const mesajlar = {
+        'Onaylandı': `Dr. ${doktorAdi} ile ${tarih} tarihli randevunuz onaylandı.`,
+        'İptal':     `Dr. ${doktorAdi} ile ${tarih} tarihli randevunuz iptal edildi.`,
+        'Tamamlandı':`Dr. ${doktorAdi} ile ${tarih} tarihli randevunuz tamamlandı.`,
+      };
+      await pool.request()
+        .input('kullaniciId', sql.Int, hastaKullaniciId)
+        .input('mesaj', sql.NVarChar, mesajlar[durum])
+        .query('INSERT INTO Bildirimler (KullaniciID, Mesaj) VALUES (@kullaniciId, @mesaj)');
+    }
+
     res.json({ mesaj: 'Güncellendi' });
   } catch (err) {
     console.error(err);

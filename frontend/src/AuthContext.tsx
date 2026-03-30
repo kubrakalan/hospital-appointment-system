@@ -11,7 +11,7 @@ interface Kullanici {
 interface AuthContextType {
   kullanici: Kullanici | null
   token: string | null
-  girisYap: (token: string, kullanici: Kullanici) => void
+  girisYap: (token: string, kullanici: Kullanici, refreshToken?: string) => void
   cikisYap: () => void
 }
 
@@ -31,9 +31,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  function girisYap(yeniToken: string, yeniKullanici: Kullanici) {
+  function girisYap(yeniToken: string, yeniKullanici: Kullanici, refreshToken?: string) {
     localStorage.setItem('token', yeniToken)
     localStorage.setItem('kullanici', JSON.stringify(yeniKullanici))
+    if (refreshToken) localStorage.setItem('refreshToken', refreshToken)
     setToken(yeniToken)
     setKullanici(yeniKullanici)
   }
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function cikisYap() {
     localStorage.removeItem('token')
     localStorage.removeItem('kullanici')
+    localStorage.removeItem('refreshToken')
     setToken(null)
     setKullanici(null)
   }

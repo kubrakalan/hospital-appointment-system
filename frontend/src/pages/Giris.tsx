@@ -21,7 +21,7 @@ export default function Giris() {
 
     try {
       const veri = await api.login(email, sifre)
-      girisYap(veri.token, veri.kullanici)
+      girisYap(veri.token, veri.kullanici, veri.refreshToken)
 
       // Role göre panele yönlendir
       if (veri.kullanici.rol === 'Admin') navigate('/admin')
@@ -112,7 +112,12 @@ export default function Giris() {
             </button>
           </form>
 
-          <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-6">
+          <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-4">
+            <Link to="/sifremi-unuttum" className="text-blue-600 dark:text-blue-400 font-medium hover:underline">
+              Şifremi Unuttum
+            </Link>
+          </p>
+          <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-2">
             Hesabın yok mu?{' '}
             <Link to="/kayit" className="text-blue-600 dark:text-blue-400 font-medium hover:underline">
               Kayıt Ol

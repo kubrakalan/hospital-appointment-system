@@ -183,6 +183,13 @@ router.get('/randevular', async (req, res) => {
 // PATCH /api/admin/randevular/:id/durum
 router.patch('/randevular/:id/durum', async (req, res) => {
   const { durum } = req.body;
+  const gecerliDurumlar = ['Beklemede', 'Onaylandı', 'Tamamlandı', 'İptal'];
+  if (!durum || !gecerliDurumlar.includes(durum)) {
+    return res.status(400).json({ hata: 'Geçersiz durum değeri' });
+  }
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).json({ hata: 'Geçersiz randevu ID' });
+  }
   try {
     const pool = await getPool();
     await pool.request()
@@ -198,6 +205,9 @@ router.patch('/randevular/:id/durum', async (req, res) => {
 
 // DELETE /api/admin/randevular/:id
 router.delete('/randevular/:id', async (req, res) => {
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).json({ hata: 'Geçersiz randevu ID' });
+  }
   try {
     const pool = await getPool();
     await pool.request()
@@ -276,6 +286,9 @@ router.post('/doktorlar', async (req, res) => {
 
 // DELETE /api/admin/doktorlar/:id
 router.delete('/doktorlar/:id', async (req, res) => {
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).json({ hata: 'Geçersiz doktor ID' });
+  }
   try {
     const pool = await getPool();
     const doktor = await pool.request()

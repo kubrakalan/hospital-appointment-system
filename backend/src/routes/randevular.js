@@ -78,6 +78,29 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ hata: 'Doktor, tarih ve saat zorunludur' });
   }
 
+  if (isNaN(parseInt(doktorId)) || parseInt(doktorId) <= 0) {
+    return res.status(400).json({ hata: 'Geçersiz doktor ID' });
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tarih)) {
+    return res.status(400).json({ hata: 'Geçersiz tarih formatı (YYYY-MM-DD bekleniyor)' });
+  }
+
+  const randevuTarih = new Date(tarih);
+  const bugun = new Date();
+  bugun.setHours(0, 0, 0, 0);
+  if (randevuTarih < bugun) {
+    return res.status(400).json({ hata: 'Geçmiş bir tarihe randevu alınamaz' });
+  }
+
+  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(saat)) {
+    return res.status(400).json({ hata: 'Geçersiz saat formatı' });
+  }
+
+  if (notlar && notlar.length > 500) {
+    return res.status(400).json({ hata: 'Notlar 500 karakterden uzun olamaz' });
+  }
+
   try {
     const pool = await getPool();
 
@@ -133,6 +156,66 @@ router.patch('/:id/iptal', async (req, res) => {
       `);
 
     res.json({ mesaj: 'Randevu iptal edildi' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// GET /api/randevular/profil — hastanın kendi profil bilgileri
+// ============================================================
+router.get('/profil', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT k.Ad, k.Soyad, k.Email, h.Telefon
+        FROM Kullaniciler k
+        JOIN Hastalar h ON h.KullaniciID = k.KullaniciID
+        WHERE k.KullaniciID = @kullaniciId
+      `);
+    if (sonuc.recordset.length === 0) {
+      return res.status(404).json({ hata: 'Profil bulunamadı' });
+    }
+    res.json(sonuc.recordset[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// PATCH /api/randevular/profil — profil güncelle
+// ============================================================
+router.patch('/profil', async (req, res) => {
+  const { ad, soyad, telefon } = req.body;
+
+  if (!ad || !soyad) {
+    return res.status(400).json({ hata: 'Ad ve soyad zorunludur' });
+  }
+  if (ad.trim().length < 2 || soyad.trim().length < 2) {
+    return res.status(400).json({ hata: 'Ad ve soyad en az 2 karakter olmalıdır' });
+  }
+  if (telefon && !/^[0-9\s\+\-\(\)]{7,15}$/.test(telefon)) {
+    return res.status(400).json({ hata: 'Geçersiz telefon numarası' });
+  }
+
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .input('ad', sql.NVarChar, ad.trim())
+      .input('soyad', sql.NVarChar, soyad.trim())
+      .query('UPDATE Kullaniciler SET Ad = @ad, Soyad = @soyad WHERE KullaniciID = @kullaniciId');
+
+    await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .input('telefon', sql.NVarChar, telefon?.trim() || null)
+      .query('UPDATE Hastalar SET Telefon = @telefon WHERE KullaniciID = @kullaniciId');
+
+    res.json({ mesaj: 'Profil güncellendi' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ hata: 'Sunucu hatası' });

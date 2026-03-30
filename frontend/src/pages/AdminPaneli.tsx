@@ -24,6 +24,34 @@ const durumRenk: Record<string, string> = {
   'İptal': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 }
 
+interface AdminRandevu {
+  RandevuID: number
+  RandevuTarihi: string
+  RandevuSaati: string
+  Durum: string
+  Notlar: string | null
+  HastaAdi: string
+  DoktorAdi: string
+  UzmanlikAdi: string
+}
+
+interface AdminDoktor {
+  DoktorID: number
+  KullaniciID: number
+  Ad: string
+  Soyad: string
+  Email: string
+  UzmanlikAdi: string
+  Telefon: string | null
+}
+
+interface Yonetici {
+  KullaniciID: number
+  Ad: string
+  Soyad: string
+  Email: string
+}
+
 const bos = { ad: '', soyad: '', email: '', sifre: '', uzmanlikAdi: '', telefon: '' }
 
 export default function AdminPaneli() {
@@ -32,9 +60,9 @@ export default function AdminPaneli() {
   const navigate = useNavigate()
 
   const [istatistik, setIstatistik] = useState({ toplamHasta: 0, toplamDoktor: 0, toplamRandevu: 0, bekleyen: 0 })
-  const [randevular, setRandevular] = useState<any[]>([])
-  const [doktorlar, setDoktorlar] = useState<any[]>([])
-  const [yoneticiler, setYoneticiler] = useState<any[]>([])
+  const [randevular, setRandevular] = useState<AdminRandevu[]>([])
+  const [doktorlar, setDoktorlar] = useState<AdminDoktor[]>([])
+  const [yoneticiler, setYoneticiler] = useState<Yonetici[]>([])
   const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'yoneticiler' | 'istatistikler'>('randevular')
   const [gunlukVeri, setGunlukVeri] = useState<{ tarih: string; sayi: number }[]>([])
   const [uzmanlikVeri, setUzmanlikVeri] = useState<{ isim: string; sayi: number }[]>([])
