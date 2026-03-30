@@ -1,15 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
 import { api } from '../api'
-
-const durumRenk: Record<string, string> = {
-  'Onaylandı': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  'Beklemede': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-  'Tamamlandı': 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-  'İptal': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-}
+import Navbar from '../components/Navbar'
+import IstatistikKart from '../components/IstatistikKart'
+import DurumBadge from '../components/DurumBadge'
 
 const tumSaatler = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00']
 
@@ -23,10 +16,6 @@ interface Doktor { DoktorID: number; Ad: string; UzmanlikAdi: string }
 interface Randevu { RandevuID: number; DoktorAdi: string; UzmanlikAdi: string; RandevuTarihi: string; RandevuSaati: string; Durum: string }
 
 export default function HastaPaneli() {
-  const { theme, toggle } = useTheme()
-  const { kullanici, cikisYap } = useAuth()
-  const navigate = useNavigate()
-
   const [doktorlar, setDoktorlar] = useState<Doktor[]>([])
   const [randevular, setRandevular] = useState<Randevu[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
@@ -54,11 +43,6 @@ export default function HastaPaneli() {
     }
     yukle()
   }, [])
-
-  function cikis() {
-    cikisYap()
-    navigate('/giris')
-  }
 
   const uzmanliklar = [...new Set(doktorlar.map(d => d.UzmanlikAdi))]
   const filtreliDoktorlar = uzmanlik ? doktorlar.filter(d => d.UzmanlikAdi === uzmanlik) : doktorlar
@@ -99,27 +83,7 @@ export default function HastaPaneli() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
 
-      {/* NAVBAR */}
-      <nav className="bg-white dark:bg-gray-800 shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl">🏥</span>
-          <span className="text-xl font-bold text-blue-700 dark:text-blue-400">MediRandevu</span>
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          <span className="text-gray-600 dark:text-gray-300 font-medium text-sm truncate hidden sm:block">
-            👤 Merhaba, {kullanici?.ad} {kullanici?.soyad}
-          </span>
-          <button
-            onClick={toggle}
-            className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg"
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-          <button onClick={cikis} className="text-red-500 hover:text-red-600 text-sm font-medium shrink-0">
-            Çıkış Yap
-          </button>
-        </div>
-      </nav>
+      <Navbar kullaniciIcon="👤" />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-8 py-10">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-8">Hasta Paneli</h1>
@@ -224,9 +188,7 @@ export default function HastaPaneli() {
                         {tarihFormatla(r.RandevuTarihi.split('T')[0])} · {String(r.RandevuSaati).substring(0, 5)}
                       </p>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-3 py-1 rounded-full font-medium ${durumRenk[r.Durum] ?? ''}`}>
-                          {r.Durum}
-                        </span>
+                        <DurumBadge durum={r.Durum} />
                         {r.Durum === 'Beklemede' && (
                           <button
                             onClick={() => handleIptal(r.RandevuID)}

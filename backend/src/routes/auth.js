@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const { getPool, sql } = require('../db');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -46,6 +47,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     const kullanici = sonuc.recordset[0];
 
     if (!kullanici) {
+      logger.warn(`Başarısız giriş denemesi (kullanıcı bulunamadı): ${email}`);
       return res.status(401).json({ hata: 'Email veya şifre hatalı' });
     }
 
@@ -53,6 +55,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     const sifreEslesti = await bcrypt.compare(sifre, kullanici.SifreHash);
 
     if (!sifreEslesti) {
+      logger.warn(`Başarısız giriş denemesi (yanlış şifre): ${email}`);
       return res.status(401).json({ hata: 'Email veya şifre hatalı' });
     }
 
@@ -67,6 +70,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       { expiresIn: '8h' }  // 8 saat geçerli
     );
 
+    logger.info(`Başarılı giriş: ${kullanici.Email} (rol: ${kullanici.Rol})`);
+
     // Şifre hash'ini cevaba dahil etme!
     res.json({
       token,
@@ -80,7 +85,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Login hatası:', err);
+    logger.error(`Login hatası: ${err.message}`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -105,6 +110,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       .query('SELECT KullaniciID FROM Kullaniciler WHERE Email = @email');
 
     if (mevcutKullanici.recordset.length > 0) {
+      logger.warn(`Kayıt denemesi — email zaten mevcut: ${email}`);
       return res.status(409).json({ hata: 'Bu email zaten kayıtlı' });
     }
 
@@ -130,10 +136,11 @@ router.post('/register', registerLimiter, async (req, res) => {
       .input('kullaniciId', sql.Int, yeniId)
       .query('INSERT INTO Hastalar (KullaniciID) VALUES (@kullaniciId)');
 
+    logger.info(`Yeni kullanıcı kaydedildi: ${email}`);
     res.status(201).json({ mesaj: 'Kayıt başarılı' });
 
   } catch (err) {
-    console.error('Register hatası:', err);
+    logger.error(`Register hatası: ${err.message}`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });

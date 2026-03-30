@@ -1,37 +1,11 @@
 import { Link } from 'react-router-dom'
-import { useTheme } from '../ThemeContext'
+import Navbar from '../components/Navbar'
 
 export default function AnaSayfa() {
-  const { theme, toggle } = useTheme()
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
 
-      {/* NAVBAR */}
-      <nav className="bg-white dark:bg-gray-800 shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🏥</span>
-          <span className="text-xl font-bold text-blue-700 dark:text-blue-400">MediRandevu</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggle}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg"
-            title={theme === 'dark' ? 'Aydınlık mod' : 'Karanlık mod'}
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-          <Link to="/giris" className="text-gray-600 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium text-sm">
-            Giriş Yap
-          </Link>
-          <Link
-            to="/kayit"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium text-sm transition"
-          >
-            Kayıt Ol
-          </Link>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* HERO */}
       <section className="bg-blue-700 text-white py-20 px-8 text-center">
