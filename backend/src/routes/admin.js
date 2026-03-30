@@ -129,6 +129,33 @@ router.get('/istatistikler/saat', async (req, res) => {
   }
 });
 
+// GET /api/admin/istatistikler/iptal — son 30 günde iptal edilen randevular
+router.get('/istatistikler/iptal', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT TOP 20
+        kh.Ad + ' ' + kh.Soyad AS hastaAdi,
+        kd.Ad + ' ' + kd.Soyad AS doktorAdi,
+        u.UzmanlikAdi,
+        CONVERT(varchar(10), rv.RandevuTarihi, 23) AS tarih
+      FROM Randevular rv
+      JOIN Hastalar h ON rv.HastaID = h.HastaID
+      JOIN Kullaniciler kh ON h.KullaniciID = kh.KullaniciID
+      JOIN Doktorlar d ON rv.DoktorID = d.DoktorID
+      JOIN Kullaniciler kd ON d.KullaniciID = kd.KullaniciID
+      JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+      WHERE rv.Durum = 'İptal'
+        AND rv.RandevuTarihi >= DATEADD(day, -30, GETDATE())
+      ORDER BY rv.RandevuTarihi DESC
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
 // GET /api/admin/randevular
 router.get('/randevular', async (req, res) => {
   try {

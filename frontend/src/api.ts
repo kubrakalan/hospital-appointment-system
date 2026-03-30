@@ -76,4 +76,6 @@ export const api = {
     istek('/admin/istatistikler/durum', {}, true),
   adminSaatIstatistik: () =>
     istek('/admin/istatistikler/saat', {}, true),
+  adminIptalListesi: () =>
+    istek('/admin/istatistikler/iptal', {}, true),
 };

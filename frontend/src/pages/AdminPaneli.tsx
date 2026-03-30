@@ -6,7 +6,7 @@ import { api } from '../api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
-  BarChart, Bar, Legend
+  BarChart, Bar
 } from 'recharts'
 
 const PASTA_RENKLERI = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#be185d', '#65a30d']
@@ -41,6 +41,7 @@ export default function AdminPaneli() {
   const [doktorVeri, setDoktorVeri] = useState<{ isim: string; sayi: number }[]>([])
   const [durumVeri, setDurumVeri] = useState<{ isim: string; sayi: number }[]>([])
   const [saatVeri, setSaatVeri] = useState<{ saat: string; sayi: number }[]>([])
+  const [iptalListesi, setIptalListesi] = useState<{ hastaAdi: string; doktorAdi: string; uzmanlikAdi: string; tarih: string }[]>([])
   const [aramaMetni, setAramaMetni] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('Tümü')
   const [doktorFormu, setDoktorFormu] = useState(false)
@@ -52,7 +53,7 @@ export default function AdminPaneli() {
   }, [])
 
   async function yukle() {
-    const [ist, r, d, y, g, uz, dok, dur, saat] = await Promise.all([
+    const [ist, r, d, y, g, uz, dok, dur, saat, iptal] = await Promise.all([
       api.adminIstatistikler(),
       api.adminRandevular(),
       api.adminDoktorlar(),
@@ -62,6 +63,7 @@ export default function AdminPaneli() {
       api.adminDoktorIstatistik(),
       api.adminDurumIstatistik(),
       api.adminSaatIstatistik(),
+      api.adminIptalListesi(),
     ])
     setIstatistik(ist)
     setRandevular(r)
@@ -72,6 +74,7 @@ export default function AdminPaneli() {
     setDoktorVeri(dok)
     setDurumVeri(dur)
     setSaatVeri(saat)
+    setIptalListesi(iptal)
   }
 
   function cikis() { cikisYap(); navigate('/giris') }
@@ -316,7 +319,7 @@ export default function AdminPaneli() {
                 )}
               </div>
 
-              {/* Pasta grafik — durum dağılımı */}
+              {/* Pasta grafik — durum dağılımı + iptal listesi */}
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
                 <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Randevu Durum Dağılımı</h2>
                 <p className="text-gray-400 text-xs mb-4">İptal oranı yüksekse dikkat</p>
@@ -331,6 +334,24 @@ export default function AdminPaneli() {
                       <Tooltip formatter={(v) => [`${v} randevu`, '']} />
                     </PieChart>
                   </ResponsiveContainer>
+                )}
+
+                {/* Son 30 günde iptal edilen randevular */}
+                {iptalListesi.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <p className="text-xs font-semibold text-red-500 mb-2">❌ Son 30 Günde İptal Edilenler</p>
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                      {iptalListesi.map((r, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
+                          <div>
+                            <p className="font-medium text-gray-800 dark:text-gray-100">{r.hastaAdi}</p>
+                            <p className="text-gray-400">Dr. {r.doktorAdi} · {r.uzmanlikAdi}</p>
+                          </div>
+                          <p className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{r.tarih}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
