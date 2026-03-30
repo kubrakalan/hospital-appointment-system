@@ -68,4 +68,12 @@ export const api = {
     istek('/admin/yoneticiler', {}, true),
   adminGunlukIstatistik: () =>
     istek('/admin/istatistikler/gunluk', {}, true),
+  adminUzmanlikIstatistik: () =>
+    istek('/admin/istatistikler/uzmanlik', {}, true),
+  adminDoktorIstatistik: () =>
+    istek('/admin/istatistikler/doktor', {}, true),
+  adminDurumIstatistik: () =>
+    istek('/admin/istatistikler/durum', {}, true),
+  adminSaatIstatistik: () =>
+    istek('/admin/istatistikler/saat', {}, true),
 };

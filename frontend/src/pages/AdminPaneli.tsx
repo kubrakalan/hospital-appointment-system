@@ -5,8 +5,17 @@ import { useAuth } from '../AuthContext'
 import { api } from '../api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  BarChart, Bar, Legend
 } from 'recharts'
+
+const PASTA_RENKLERI = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#be185d', '#65a30d']
+const DURUM_RENKLERI: Record<string, string> = {
+  'Tamamlandı': '#16a34a',
+  'Beklemede':  '#d97706',
+  'Onaylandı':  '#2563eb',
+  'İptal':      '#dc2626',
+}
 
 const durumRenk: Record<string, string> = {
   'Onaylandı': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -28,6 +37,10 @@ export default function AdminPaneli() {
   const [yoneticiler, setYoneticiler] = useState<any[]>([])
   const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'yoneticiler' | 'istatistikler'>('randevular')
   const [gunlukVeri, setGunlukVeri] = useState<{ tarih: string; sayi: number }[]>([])
+  const [uzmanlikVeri, setUzmanlikVeri] = useState<{ isim: string; sayi: number }[]>([])
+  const [doktorVeri, setDoktorVeri] = useState<{ isim: string; sayi: number }[]>([])
+  const [durumVeri, setDurumVeri] = useState<{ isim: string; sayi: number }[]>([])
+  const [saatVeri, setSaatVeri] = useState<{ saat: string; sayi: number }[]>([])
   const [aramaMetni, setAramaMetni] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('Tümü')
   const [doktorFormu, setDoktorFormu] = useState(false)
@@ -39,18 +52,26 @@ export default function AdminPaneli() {
   }, [])
 
   async function yukle() {
-    const [ist, r, d, y, g] = await Promise.all([
+    const [ist, r, d, y, g, uz, dok, dur, saat] = await Promise.all([
       api.adminIstatistikler(),
       api.adminRandevular(),
       api.adminDoktorlar(),
       api.adminYoneticiler(),
       api.adminGunlukIstatistik(),
+      api.adminUzmanlikIstatistik(),
+      api.adminDoktorIstatistik(),
+      api.adminDurumIstatistik(),
+      api.adminSaatIstatistik(),
     ])
     setIstatistik(ist)
     setRandevular(r)
     setDoktorlar(d)
     setYoneticiler(y)
     setGunlukVeri(g)
+    setUzmanlikVeri(uz)
+    setDoktorVeri(dok)
+    setDurumVeri(dur)
+    setSaatVeri(saat)
   }
 
   function cikis() { cikisYap(); navigate('/giris') }
@@ -240,63 +261,113 @@ export default function AdminPaneli() {
 
         {/* İSTATİSTİKLER */}
         {aktifSekme === 'istatistikler' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-1">Son 30 Günlük Randevu Grafiği</h2>
-            <p className="text-gray-400 text-sm mb-6">Her güne ait toplam randevu sayısı</p>
+          <div className="flex flex-col gap-6">
 
-            {gunlukVeri.length === 0 ? (
-              <p className="text-center text-gray-400 py-12">Son 30 günde randevu bulunamadı.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={gunlukVeri} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="tarih"
-                    tick={{ fontSize: 11, fill: '#9ca3af' }}
-                    tickFormatter={(val) => val.slice(5)} // "2026-03-15" → "03-15"
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fontSize: 11, fill: '#9ca3af' }}
-                    width={30}
-                  />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f9fafb' }}
-                    formatter={(val) => [`${val} randevu`, '']}
-                    labelFormatter={(label) => `Tarih: ${label}`}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="sayi"
-                    stroke="#2563eb"
-                    strokeWidth={2.5}
-                    dot={{ r: 4, fill: '#2563eb' }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+            {/* Çizgi grafik — günlük randevu */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Son 30 Günlük Randevu</h2>
+              <p className="text-gray-400 text-xs mb-4">Her güne ait toplam randevu sayısı</p>
+              {gunlukVeri.length === 0 ? (
+                <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={gunlukVeri} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="tarih" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} width={30} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f9fafb' }} formatter={(v) => [`${v} randevu`, '']} labelFormatter={(l) => `Tarih: ${l}`} />
+                    <Line type="monotone" dataKey="sayi" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4, fill: '#2563eb' }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.reduce((t, g) => t + g.sayi, 0)}</p>
+                  <p className="text-xs text-gray-400 mt-1">30 gün toplam</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.length > 0 ? Math.max(...gunlukVeri.map(g => g.sayi)) : 0}</p>
+                  <p className="text-xs text-gray-400 mt-1">En yoğun gün</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.length > 0 ? (gunlukVeri.reduce((t, g) => t + g.sayi, 0) / gunlukVeri.length).toFixed(1) : 0}</p>
+                  <p className="text-xs text-gray-400 mt-1">Günlük ortalama</p>
+                </div>
+              </div>
+            </div>
 
-            {/* Özet istatistikler */}
-            <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                  {gunlukVeri.reduce((t, g) => t + g.sayi, 0)}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">Son 30 gün toplam</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Pasta grafik — uzmanlık dağılımı */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Uzmanlığa Göre Randevu</h2>
+                <p className="text-gray-400 text-xs mb-4">Hangi bölüme ne kadar başvuru var</p>
+                {uzmanlikVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={uzmanlikVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} %${((percent ?? 0) * 100).toFixed(0)}`} labelLine={false}>
+                        {uzmanlikVeri.map((_, i) => (
+                          <Cell key={i} fill={PASTA_RENKLERI[i % PASTA_RENKLERI.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                  {gunlukVeri.length > 0 ? Math.max(...gunlukVeri.map(g => g.sayi)) : 0}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">En yoğun gün</p>
+
+              {/* Pasta grafik — durum dağılımı */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Randevu Durum Dağılımı</h2>
+                <p className="text-gray-400 text-xs mb-4">İptal oranı yüksekse dikkat</p>
+                {durumVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={durumVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({ name, percent }) => `${name} %${((percent ?? 0) * 100).toFixed(0)}`} labelLine={false}>
+                        {durumVeri.map((entry, i) => (
+                          <Cell key={i} fill={DURUM_RENKLERI[entry.isim] ?? PASTA_RENKLERI[i]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                  {gunlukVeri.length > 0 ? (gunlukVeri.reduce((t, g) => t + g.sayi, 0) / gunlukVeri.length).toFixed(1) : 0}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">Günlük ortalama</p>
+
+              {/* Yatay bar grafik — en çok randevu alan doktorlar */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Çok Randevu Alan Doktorlar</h2>
+                <p className="text-gray-400 text-xs mb-4">İlk 5 doktor</p>
+                {doktorVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={doktorVeri} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                      <YAxis type="category" dataKey="isim" tick={{ fontSize: 11, fill: '#9ca3af' }} width={100} />
+                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
+                      <Bar dataKey="sayi" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
+
+              {/* Bar grafik — saate göre yoğunluk */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Saate Göre Yoğunluk</h2>
+                <p className="text-gray-400 text-xs mb-4">Hangi saatler dolu taşıyor</p>
+                {saatVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={saatVeri} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="saat" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} width={30} />
+                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
+                      <Bar dataKey="sayi" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
             </div>
           </div>
         )}

@@ -54,6 +54,81 @@ router.get('/istatistikler/gunluk', async (req, res) => {
   }
 });
 
+// GET /api/admin/istatistikler/uzmanlik — uzmanlığa göre randevu sayısı
+router.get('/istatistikler/uzmanlik', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT u.UzmanlikAdi AS isim, COUNT(*) AS sayi
+      FROM Randevular rv
+      JOIN Doktorlar d ON rv.DoktorID = d.DoktorID
+      JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+      GROUP BY u.UzmanlikAdi
+      ORDER BY sayi DESC
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// GET /api/admin/istatistikler/doktor — en çok randevu alan doktorlar (top 5)
+router.get('/istatistikler/doktor', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT TOP 5
+        k.Ad + ' ' + k.Soyad AS isim,
+        COUNT(*) AS sayi
+      FROM Randevular rv
+      JOIN Doktorlar d ON rv.DoktorID = d.DoktorID
+      JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
+      GROUP BY k.Ad, k.Soyad
+      ORDER BY sayi DESC
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// GET /api/admin/istatistikler/durum — randevu durum dağılımı
+router.get('/istatistikler/durum', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT Durum AS isim, COUNT(*) AS sayi
+      FROM Randevular
+      GROUP BY Durum
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// GET /api/admin/istatistikler/saat — saate göre randevu yoğunluğu
+router.get('/istatistikler/saat', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT
+        LEFT(CONVERT(varchar(5), RandevuSaati, 108), 5) AS saat,
+        COUNT(*) AS sayi
+      FROM Randevular
+      GROUP BY LEFT(CONVERT(varchar(5), RandevuSaati, 108), 5)
+      ORDER BY saat
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
 // GET /api/admin/randevular
 router.get('/randevular', async (req, res) => {
   try {
