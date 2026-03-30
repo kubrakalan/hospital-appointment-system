@@ -2,9 +2,11 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
+const basicAuth = require('../middleware/basicAuth');
 
 const router = express.Router();
-router.use(authMiddleware);
+router.use(basicAuth);      // 1. katman: Basic Auth (kullanıcı adı + şifre)
+router.use(authMiddleware); // 2. katman: JWT token doğrulama
 
 // Sadece Admin rolü erişebilir
 router.use((req, res, next) => {

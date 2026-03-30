@@ -1,15 +1,34 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const { getPool, sql } = require('../db');
 
 const router = express.Router();
+
+// 15 dakikada en fazla 10 login denemesi
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { hata: 'Çok fazla giriş denemesi. 15 dakika sonra tekrar deneyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 1 saatte en fazla 5 kayıt
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { hata: 'Çok fazla kayıt denemesi. 1 saat sonra tekrar deneyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ============================================================
 // POST /api/auth/login
 // Kullanıcı email + şifre gönderir, token alır
 // ============================================================
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, sifre } = req.body;
 
   if (!email || !sifre) {
@@ -70,7 +89,7 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/register
 // Yeni hasta kaydı oluşturur
 // ============================================================
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const { email, sifre, ad, soyad } = req.body;
 
   if (!email || !sifre || !ad || !soyad) {
