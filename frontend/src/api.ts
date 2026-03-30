@@ -66,4 +66,6 @@ export const api = {
     istek(`/admin/doktorlar/${id}`, { method: 'DELETE' }, true),
   adminYoneticiler: () =>
     istek('/admin/yoneticiler', {}, true),
+  adminGunlukIstatistik: () =>
+    istek('/admin/istatistikler/gunluk', {}, true),
 };

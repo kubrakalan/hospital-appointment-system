@@ -34,6 +34,26 @@ router.get('/istatistikler', async (req, res) => {
   }
 });
 
+// GET /api/admin/istatistikler/gunluk — son 30 günün randevu sayısı
+router.get('/istatistikler/gunluk', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT
+        CONVERT(varchar(10), RandevuTarihi, 23) AS tarih,
+        COUNT(*) AS sayi
+      FROM Randevular
+      WHERE RandevuTarihi >= DATEADD(day, -30, GETDATE())
+      GROUP BY CONVERT(varchar(10), RandevuTarihi, 23)
+      ORDER BY tarih
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
 // GET /api/admin/randevular
 router.get('/randevular', async (req, res) => {
   try {

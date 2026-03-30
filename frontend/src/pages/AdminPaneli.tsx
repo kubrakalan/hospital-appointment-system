@@ -3,6 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
 import { api } from '../api'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
+} from 'recharts'
 
 const durumRenk: Record<string, string> = {
   'Onaylandı': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -22,7 +26,8 @@ export default function AdminPaneli() {
   const [randevular, setRandevular] = useState<any[]>([])
   const [doktorlar, setDoktorlar] = useState<any[]>([])
   const [yoneticiler, setYoneticiler] = useState<any[]>([])
-  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'yoneticiler'>('randevular')
+  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'yoneticiler' | 'istatistikler'>('randevular')
+  const [gunlukVeri, setGunlukVeri] = useState<{ tarih: string; sayi: number }[]>([])
   const [aramaMetni, setAramaMetni] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('Tümü')
   const [doktorFormu, setDoktorFormu] = useState(false)
@@ -34,16 +39,18 @@ export default function AdminPaneli() {
   }, [])
 
   async function yukle() {
-    const [ist, r, d, y] = await Promise.all([
+    const [ist, r, d, y, g] = await Promise.all([
       api.adminIstatistikler(),
       api.adminRandevular(),
       api.adminDoktorlar(),
       api.adminYoneticiler(),
+      api.adminGunlukIstatistik(),
     ])
     setIstatistik(ist)
     setRandevular(r)
     setDoktorlar(d)
     setYoneticiler(y)
+    setGunlukVeri(g)
   }
 
   function cikis() { cikisYap(); navigate('/giris') }
@@ -129,10 +136,10 @@ export default function AdminPaneli() {
         </div>
 
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-          {(['randevular', 'doktorlar', 'yoneticiler'] as const).map((sekme) => (
+          {(['randevular', 'doktorlar', 'yoneticiler', 'istatistikler'] as const).map((sekme) => (
             <button key={sekme} onClick={() => setAktifSekme(sekme)}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition whitespace-nowrap ${aktifSekme === sekme ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-              {sekme === 'randevular' ? 'Randevular' : sekme === 'doktorlar' ? 'Doktorlar' : 'Yöneticiler'}
+              {sekme === 'randevular' ? 'Randevular' : sekme === 'doktorlar' ? 'Doktorlar' : sekme === 'yoneticiler' ? 'Yöneticiler' : '📈 İstatistikler'}
             </button>
           ))}
         </div>
@@ -227,6 +234,69 @@ export default function AdminPaneli() {
                   <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition shrink-0">Kaldır</button>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* İSTATİSTİKLER */}
+        {aktifSekme === 'istatistikler' && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-1">Son 30 Günlük Randevu Grafiği</h2>
+            <p className="text-gray-400 text-sm mb-6">Her güne ait toplam randevu sayısı</p>
+
+            {gunlukVeri.length === 0 ? (
+              <p className="text-center text-gray-400 py-12">Son 30 günde randevu bulunamadı.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={gunlukVeri} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="tarih"
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    tickFormatter={(val) => val.slice(5)} // "2026-03-15" → "03-15"
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    width={30}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f9fafb' }}
+                    formatter={(val) => [`${val} randevu`, '']}
+                    labelFormatter={(label) => `Tarih: ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="sayi"
+                    stroke="#2563eb"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#2563eb' }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+
+            {/* Özet istatistikler */}
+            <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                  {gunlukVeri.reduce((t, g) => t + g.sayi, 0)}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Son 30 gün toplam</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                  {gunlukVeri.length > 0 ? Math.max(...gunlukVeri.map(g => g.sayi)) : 0}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">En yoğun gün</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                  {gunlukVeri.length > 0 ? (gunlukVeri.reduce((t, g) => t + g.sayi, 0) / gunlukVeri.length).toFixed(1) : 0}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Günlük ortalama</p>
+              </div>
             </div>
           </div>
         )}
