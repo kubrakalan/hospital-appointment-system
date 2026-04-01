@@ -1,6 +1,7 @@
 const express = require('express');
 const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
+const randevuLogger = require('../randevuLogger');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -69,6 +70,10 @@ router.patch('/randevular/:id/durum', async (req, res) => {
         .query('INSERT INTO Bildirimler (KullaniciID, Mesaj) VALUES (@kullaniciId, @mesaj)');
     }
 
+    if (sonuc.recordset.length > 0) {
+      const { tarih } = sonuc.recordset[0];
+      randevuLogger.info(`DURUM DEĞİŞTİ | randevuId=${req.params.id} yeniDurum=${durum} tarih=${tarih} | doktorKullaniciId=${req.kullanici.kullaniciId}`);
+    }
     res.json({ mesaj: 'Güncellendi' });
   } catch (err) {
     console.error(err);

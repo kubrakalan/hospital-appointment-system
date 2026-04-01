@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
 const basicAuth = require('../middleware/basicAuth');
+const randevuLogger = require('../randevuLogger');
 
 const router = express.Router();
 router.use(basicAuth);      // 1. katman: Basic Auth (kullanıcı adı + şifre)
@@ -196,6 +197,7 @@ router.patch('/randevular/:id/durum', async (req, res) => {
       .input('id', sql.Int, req.params.id)
       .input('durum', sql.NVarChar, durum)
       .query('UPDATE Randevular SET Durum = @durum WHERE RandevuID = @id');
+    randevuLogger.info(`DURUM DEĞİŞTİ | randevuId=${req.params.id} yeniDurum=${durum} | adminKullaniciId=${req.kullanici.kullaniciId}`);
     res.json({ mesaj: 'Güncellendi' });
   } catch (err) {
     console.error(err);
@@ -213,6 +215,7 @@ router.delete('/randevular/:id', async (req, res) => {
     await pool.request()
       .input('id', sql.Int, req.params.id)
       .query('DELETE FROM Randevular WHERE RandevuID = @id');
+    randevuLogger.info(`SİLİNDİ | randevuId=${req.params.id} | adminKullaniciId=${req.kullanici.kullaniciId}`);
     res.json({ mesaj: 'Silindi' });
   } catch (err) {
     console.error(err);
@@ -225,7 +228,7 @@ router.get('/doktorlar', async (req, res) => {
   try {
     const pool = await getPool();
     const r = await pool.request().query(`
-      SELECT d.DoktorID, k.KullaniciID, k.Ad, k.Soyad, k.Email, u.UzmanlikAdi, d.Telefon
+      SELECT d.DoktorID, k.KullaniciID, k.Ad, k.Soyad, k.Email, u.UzmanlikAdi, d.Telefon, d.Aktif
       FROM Doktorlar d
       JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
       JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
@@ -302,6 +305,32 @@ router.delete('/doktorlar/:id', async (req, res) => {
     await pool.request().input('kullaniciId', sql.Int, kullaniciId).query('DELETE FROM Kullaniciler WHERE KullaniciID = @kullaniciId');
 
     res.json({ mesaj: 'Doktor silindi' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// PATCH /api/admin/doktorlar/:id/aktif — aktif/pasif toggle
+router.patch('/doktorlar/:id/aktif', async (req, res) => {
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).json({ hata: 'Geçersiz doktor ID' });
+  }
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query('SELECT Aktif FROM Doktorlar WHERE DoktorID = @id');
+
+    if (sonuc.recordset.length === 0) return res.status(404).json({ hata: 'Doktor bulunamadı' });
+
+    const yeniAktif = sonuc.recordset[0].Aktif ? 0 : 1;
+    await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .input('aktif', sql.Bit, yeniAktif)
+      .query('UPDATE Doktorlar SET Aktif = @aktif WHERE DoktorID = @id');
+
+    res.json({ aktif: yeniAktif });
   } catch (err) {
     console.error(err);
     res.status(500).json({ hata: 'Sunucu hatası' });

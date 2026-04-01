@@ -1,6 +1,7 @@
 const express = require('express');
 const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
+const randevuLogger = require('../randevuLogger');
 
 const router = express.Router();
 
@@ -54,10 +55,12 @@ router.get('/doktorlar', async (req, res) => {
       SELECT
         d.DoktorID,
         k.Ad + ' ' + k.Soyad AS Ad,
-        u.UzmanlikAdi
+        u.UzmanlikAdi,
+        d.Aktif
       FROM Doktorlar d
       JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
       JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+      WHERE d.Aktif = 1
     `);
 
     res.json(sonuc.recordset);
@@ -127,6 +130,7 @@ router.post('/', async (req, res) => {
         VALUES (@hastaId, @doktorId, CAST(@tarih AS DATE), CAST(@saat AS TIME), @notlar)
       `);
 
+    randevuLogger.info(`OLUŞTURULDU | hastaKullaniciId=${req.kullanici.kullaniciId} doktorId=${doktorId} tarih=${tarih} saat=${saat}`);
     res.status(201).json({ mesaj: 'Randevu oluşturuldu' });
   } catch (err) {
     if (err.number === 2627) { // Unique constraint - çakışma
@@ -155,6 +159,7 @@ router.patch('/:id/iptal', async (req, res) => {
         WHERE r.RandevuID = @randevuId AND h.KullaniciID = @kullaniciId
       `);
 
+    randevuLogger.info(`İPTAL | hastaKullaniciId=${req.kullanici.kullaniciId} randevuId=${req.params.id} | iptal eden: hasta`);
     res.json({ mesaj: 'Randevu iptal edildi' });
   } catch (err) {
     console.error(err);
