@@ -134,6 +134,8 @@ export const api = {
     istek('/admin/doktorlar', { method: 'POST', body: JSON.stringify(data) }, true),
   adminDoktorSil: (id: number) =>
     istek(`/admin/doktorlar/${id}`, { method: 'DELETE' }, true),
+  adminDoktorAktifToggle: (id: number) =>
+    istek(`/admin/doktorlar/${id}/aktif`, { method: 'PATCH' }, true),
   adminYoneticiler: () =>
     istek('/admin/yoneticiler', {}, true),
   adminGunlukIstatistik: () =>

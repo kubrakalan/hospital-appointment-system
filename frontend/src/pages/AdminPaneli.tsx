@@ -62,6 +62,7 @@ interface AdminDoktor {
   Email: string
   UzmanlikAdi: string
   Telefon: string | null
+  Aktif: boolean
 }
 
 interface Yonetici {
@@ -161,6 +162,11 @@ export default function AdminPaneli() {
   async function doktorSil(id: number) {
     await api.adminDoktorSil(id)
     setDoktorlar(prev => prev.filter(d => d.DoktorID !== id))
+  }
+
+  async function doktorAktifToggle(id: number) {
+    const sonuc = await api.adminDoktorAktifToggle(id)
+    setDoktorlar(prev => prev.map(d => d.DoktorID === id ? { ...d, Aktif: sonuc.aktif === 1 } : d))
   }
 
   const filtreliRandevular = randevular.filter(r => {
@@ -302,11 +308,21 @@ export default function AdminPaneli() {
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-2xl shrink-0">👨‍⚕️</span>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {d.Ad} {d.Soyad}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {d.Ad} {d.Soyad}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${d.Aktif ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                          {d.Aktif ? 'Aktif' : 'Pasif'}
+                        </span>
+                      </div>
                       <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{d.UzmanlikAdi} · {d.Email}</p>
                     </div>
                   </div>
-                  <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition shrink-0">Kaldır</button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => doktorAktifToggle(d.DoktorID)} className={`text-xs px-3 py-1.5 rounded-lg transition ${d.Aktif ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-200' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200'}`}>
+                      {d.Aktif ? 'Pasife Al' : 'Aktife Al'}
+                    </button>
+                    <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">Kaldır</button>
+                  </div>
                 </div>
               ))}
             </div>
