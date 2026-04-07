@@ -113,11 +113,22 @@ export const api = {
   randevuIptal: (id: number) =>
     istek(`/randevular/${id}/iptal`, { method: 'PATCH' }),
 
+  // Hasta — tıbbi kayıt (DoktorNotu gösterilmez)
+  tibbiBilgiHasta: (randevuId: number) =>
+    istek(`/randevular/${randevuId}/tibbi-kayit`),
+
   // Doktor
   doktorRandevular: () =>
     istek('/doktor/randevular'),
   doktorRandevuDurum: (id: number, durum: string) =>
     istek(`/doktor/randevular/${id}/durum`, { method: 'PATCH', body: JSON.stringify({ durum }) }),
+  doktorTibbiBilgiGetir: (randevuId: number) =>
+    istek(`/doktor/randevular/${randevuId}/tibbi-kayit`),
+  doktorTibbiBilgiKaydet: (randevuId: number, data: {
+    tani?: string; uygulananIslem?: string; recete?: string;
+    labNotu?: string; doktorNotu?: string; sonrakiKontrol?: string;
+  }) =>
+    istek(`/doktor/randevular/${randevuId}/tibbi-kayit`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Admin
   adminIstatistikler: () =>
@@ -134,8 +145,8 @@ export const api = {
     istek('/admin/doktorlar', { method: 'POST', body: JSON.stringify(data) }, true),
   adminDoktorSil: (id: number) =>
     istek(`/admin/doktorlar/${id}`, { method: 'DELETE' }, true),
-  adminDoktorAktifToggle: (id: number) =>
-    istek(`/admin/doktorlar/${id}/aktif`, { method: 'PATCH' }, true),
+  adminDoktorDurumGuncelle: (id: number, durum: string, izinBaslangic?: string, izinBitis?: string) =>
+    istek(`/admin/doktorlar/${id}/durum`, { method: 'PATCH', body: JSON.stringify({ durum, izinBaslangic, izinBitis }) }, true),
   adminYoneticiler: () =>
     istek('/admin/yoneticiler', {}, true),
   adminGunlukIstatistik: () =>
