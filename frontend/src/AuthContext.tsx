@@ -26,8 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const kaydedilmisToken = localStorage.getItem('token')
     const kaydedilmisKullanici = localStorage.getItem('kullanici')
     if (kaydedilmisToken && kaydedilmisKullanici) {
-      setToken(kaydedilmisToken)
-      setKullanici(JSON.parse(kaydedilmisKullanici))
+      try {
+        setToken(kaydedilmisToken)
+        setKullanici(JSON.parse(kaydedilmisKullanici))
+      } catch {
+        // Bozuk veri varsa temizle
+        localStorage.removeItem('token')
+        localStorage.removeItem('kullanici')
+        localStorage.removeItem('refreshToken')
+      }
     }
   }, [])
 

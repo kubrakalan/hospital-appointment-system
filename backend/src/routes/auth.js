@@ -9,6 +9,14 @@ const logger = require('../logger');
 // Şifre sıfırlama token'larını bellekte tut (token → { email, expiry })
 const sifirlamaTokenlari = new Map();
 
+// Her saat süresi dolmuş tokenları temizle
+setInterval(() => {
+  const simdi = Date.now();
+  for (const [token, kayit] of sifirlamaTokenlari.entries()) {
+    if (simdi > kayit.expiry) sifirlamaTokenlari.delete(token);
+  }
+}, 60 * 60 * 1000);
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
@@ -30,6 +38,15 @@ const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
   message: { hata: 'Çok fazla kayıt denemesi. 1 saat sonra tekrar deneyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 1 saatte en fazla 5 şifre sıfırlama isteği
+const sifreSifirlamaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { hata: 'Çok fazla şifre sıfırlama denemesi. 1 saat sonra tekrar deneyin.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -56,7 +73,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     const kullanici = sonuc.recordset[0];
 
     if (!kullanici) {
-      logger.warn(`Başarısız giriş denemesi (kullanıcı bulunamadı): ${email}`);
+      logger.warn(`GİRİŞ BAŞARISIZ | sebep=kullanıcı_bulunamadı email=${email} ip=${req.ip}`);
       return res.status(401).json({ hata: 'Email veya şifre hatalı' });
     }
 
@@ -64,8 +81,27 @@ router.post('/login', loginLimiter, async (req, res) => {
     const sifreEslesti = await bcrypt.compare(sifre, kullanici.SifreHash);
 
     if (!sifreEslesti) {
-      logger.warn(`Başarısız giriş denemesi (yanlış şifre): ${email}`);
+      logger.warn(`GİRİŞ BAŞARISIZ | sebep=yanlış_şifre email=${email} ip=${req.ip}`);
       return res.status(401).json({ hata: 'Email veya şifre hatalı' });
+    }
+
+    // Doktor ise durum kontrolü yap
+    if (kullanici.Rol === 'Doktor') {
+      const doktorSonuc = await pool.request()
+        .input('kullaniciId', sql.Int, kullanici.KullaniciID)
+        .query('SELECT Durum FROM Doktorlar WHERE KullaniciID = @kullaniciId');
+
+      const doktor = doktorSonuc.recordset[0];
+      if (doktor) {
+        if (doktor.Durum === 'Ayrıldı') {
+          logger.warn(`GİRİŞ ENGELLENDI | sebep=hesap_devre_dışı email=${email} ad="${kullanici.Ad} ${kullanici.Soyad}" ip=${req.ip}`);
+          return res.status(401).json({ hata: 'Hesabınız devre dışı bırakılmıştır.' });
+        }
+        if (doktor.Durum === 'İzinli') {
+          logger.warn(`GİRİŞ ENGELLENDI | sebep=izin_aktif email=${email} ad="${kullanici.Ad} ${kullanici.Soyad}" ip=${req.ip}`);
+          return res.status(401).json({ hata: 'İzin sürenizde sisteme giriş yapamazsınız.' });
+        }
+      }
     }
 
     // Access token — kısa süreli (15 dakika)
@@ -86,7 +122,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    logger.info(`Başarılı giriş: ${kullanici.Email} (rol: ${kullanici.Rol})`);
+    logger.info(`GİRİŞ BAŞARILI | email=${kullanici.Email} ad="${kullanici.Ad} ${kullanici.Soyad}" rol=${kullanici.Rol} ip=${req.ip}`);
 
     // Şifre hash'ini cevaba dahil etme!
     res.json({
@@ -102,7 +138,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
 
   } catch (err) {
-    logger.error(`Login hatası: ${err.message}`);
+    logger.error(`Login hatası | email=${email} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -127,7 +163,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       .query('SELECT KullaniciID FROM Kullaniciler WHERE Email = @email');
 
     if (mevcutKullanici.recordset.length > 0) {
-      logger.warn(`Kayıt denemesi — email zaten mevcut: ${email}`);
+      logger.warn(`KAYIT BAŞARISIZ | sebep=email_mevcut email=${email} ip=${req.ip}`);
       return res.status(409).json({ hata: 'Bu email zaten kayıtlı' });
     }
 
@@ -153,11 +189,11 @@ router.post('/register', registerLimiter, async (req, res) => {
       .input('kullaniciId', sql.Int, yeniId)
       .query('INSERT INTO Hastalar (KullaniciID) VALUES (@kullaniciId)');
 
-    logger.info(`Yeni kullanıcı kaydedildi: ${email}`);
+    logger.info(`KAYIT BAŞARILI | email=${email} ad="${ad} ${soyad}" ip=${req.ip}`);
     res.status(201).json({ mesaj: 'Kayıt başarılı' });
 
   } catch (err) {
-    logger.error(`Register hatası: ${err.message}`);
+    logger.error(`Register hatası | email=${email} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -166,7 +202,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 // POST /api/auth/sifremi-unuttum
 // Email gönderir, sıfırlama linki içerir
 // ============================================================
-router.post('/sifremi-unuttum', async (req, res) => {
+router.post('/sifremi-unuttum', sifreSifirlamaLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ hata: 'Email zorunludur' });
 
@@ -208,7 +244,7 @@ router.post('/sifremi-unuttum', async (req, res) => {
 // POST /api/auth/sifre-sifirla
 // Token + yeni şifre ile şifreyi günceller
 // ============================================================
-router.post('/sifre-sifirla', async (req, res) => {
+router.post('/sifre-sifirla', sifreSifirlamaLimiter, async (req, res) => {
   const { token, yeniSifre } = req.body;
   if (!token || !yeniSifre) return res.status(400).json({ hata: 'Token ve yeni şifre zorunludur' });
   if (yeniSifre.length < 6) return res.status(400).json({ hata: 'Şifre en az 6 karakter olmalıdır' });
@@ -239,7 +275,7 @@ router.post('/sifre-sifirla', async (req, res) => {
 // POST /api/auth/refresh
 // Refresh token ile yeni access token alır
 // ============================================================
-router.post('/refresh', (req, res) => {
+router.post('/refresh', async (req, res) => {
   const { refreshToken } = req.body;
 
   if (!refreshToken) {
@@ -252,16 +288,27 @@ router.post('/refresh', (req, res) => {
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh'
     );
 
+    // Refresh token sadece kullaniciId içerir; güncel email+rol için DB'ye sor
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, decoded.kullaniciId)
+      .query('SELECT Email, Rol FROM Kullaniciler WHERE KullaniciID = @kullaniciId');
+
+    const kullanici = sonuc.recordset[0];
+    if (!kullanici) {
+      return res.status(401).json({ hata: 'Kullanıcı bulunamadı' });
+    }
+
     const yeniToken = jwt.sign(
-      { kullaniciId: decoded.kullaniciId, email: decoded.email, rol: decoded.rol },
+      { kullaniciId: decoded.kullaniciId, email: kullanici.Email, rol: kullanici.Rol },
       process.env.JWT_SECRET,
       { expiresIn: '15m' }
     );
 
-    logger.info(`Token yenilendi: kullaniciId=${decoded.kullaniciId}`);
+    logger.info(`TOKEN YENİLENDİ | kullaniciId=${decoded.kullaniciId} email=${kullanici.Email} ip=${req.ip}`);
     res.json({ token: yeniToken });
   } catch {
-    logger.warn('Geçersiz refresh token denemesi');
+    logger.warn(`GEÇERSİZ REFRESH TOKEN | ip=${req.ip}`);
     res.status(401).json({ hata: 'Geçersiz veya süresi dolmuş refresh token' });
   }
 });

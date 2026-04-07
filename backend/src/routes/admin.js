@@ -4,6 +4,7 @@ const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
 const basicAuth = require('../middleware/basicAuth');
 const randevuLogger = require('../randevuLogger');
+const logger = require('../logger');
 
 const router = express.Router();
 router.use(basicAuth);      // 1. katman: Basic Auth (kullanıcı adı + şifre)
@@ -30,7 +31,7 @@ router.get('/istatistikler', async (req, res) => {
     `);
     res.json(r.recordset[0]);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -50,7 +51,7 @@ router.get('/istatistikler/gunluk', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -69,7 +70,7 @@ router.get('/istatistikler/uzmanlik', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -90,7 +91,7 @@ router.get('/istatistikler/doktor', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -106,7 +107,7 @@ router.get('/istatistikler/durum', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -125,7 +126,7 @@ router.get('/istatistikler/saat', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -152,7 +153,7 @@ router.get('/istatistikler/iptal', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -176,7 +177,7 @@ router.get('/randevular', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -200,7 +201,7 @@ router.patch('/randevular/:id/durum', async (req, res) => {
     randevuLogger.info(`DURUM DEĞİŞTİ | randevuId=${req.params.id} yeniDurum=${durum} | adminKullaniciId=${req.kullanici.kullaniciId}`);
     res.json({ mesaj: 'Güncellendi' });
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -218,7 +219,7 @@ router.delete('/randevular/:id', async (req, res) => {
     randevuLogger.info(`SİLİNDİ | randevuId=${req.params.id} | adminKullaniciId=${req.kullanici.kullaniciId}`);
     res.json({ mesaj: 'Silindi' });
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -228,14 +229,15 @@ router.get('/doktorlar', async (req, res) => {
   try {
     const pool = await getPool();
     const r = await pool.request().query(`
-      SELECT d.DoktorID, k.KullaniciID, k.Ad, k.Soyad, k.Email, u.UzmanlikAdi, d.Telefon, d.Aktif
+      SELECT d.DoktorID, k.KullaniciID, k.Ad, k.Soyad, k.Email, u.UzmanlikAdi, d.Telefon,
+             d.Durum, d.IzinBaslangic, d.IzinBitis
       FROM Doktorlar d
       JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
       JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -245,6 +247,12 @@ router.post('/doktorlar', async (req, res) => {
   const { ad, soyad, email, sifre, uzmanlikAdi, telefon } = req.body;
   if (!ad || !soyad || !email || !sifre || !uzmanlikAdi) {
     return res.status(400).json({ hata: 'Tüm alanlar zorunludur' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ hata: 'Geçersiz email formatı' });
+  }
+  if (sifre.length < 6) {
+    return res.status(400).json({ hata: 'Şifre en az 6 karakter olmalıdır' });
   }
   try {
     const pool = await getPool();
@@ -282,7 +290,7 @@ router.post('/doktorlar', async (req, res) => {
     res.status(201).json({ mesaj: 'Doktor eklendi' });
   } catch (err) {
     if (err.number === 2627) return res.status(409).json({ hata: 'Bu email zaten kayıtlı' });
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -306,33 +314,104 @@ router.delete('/doktorlar/:id', async (req, res) => {
 
     res.json({ mesaj: 'Doktor silindi' });
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
 
-// PATCH /api/admin/doktorlar/:id/aktif — aktif/pasif toggle
-router.patch('/doktorlar/:id/aktif', async (req, res) => {
+// PATCH /api/admin/doktorlar/:id/durum
+// Body: { durum: 'Aktif' | 'İzinli' | 'Ayrıldı', izinBaslangic?, izinBitis? }
+//
+// Senaryo A — Planlı izin: durum='İzinli' + izinBaslangic + izinBitis verilir
+//   → Mevcut randevular korunur, yeni randevu alınamaz
+// Senaryo B — Anlık izin veya Ayrıldı: tarih verilmez
+//   → Gelecekteki tüm randevular iptal edilir, hastalara bildirim gider
+// Senaryo C — Aktif yapılır: izin tarihleri temizlenir
+router.patch('/doktorlar/:id/durum', async (req, res) => {
   if (isNaN(parseInt(req.params.id))) {
     return res.status(400).json({ hata: 'Geçersiz doktor ID' });
   }
+
+  const { durum, izinBaslangic, izinBitis } = req.body;
+  const gecerliDurumlar = ['Aktif', 'İzinli', 'Ayrıldı'];
+  if (!durum || !gecerliDurumlar.includes(durum)) {
+    return res.status(400).json({ hata: 'Geçersiz durum. Aktif, İzinli veya Ayrıldı olmalı.' });
+  }
+
+  // Planlı izin mi? Her iki tarih de verilmeli
+  const planliIzin = durum === 'İzinli' && izinBaslangic && izinBitis;
+
   try {
     const pool = await getPool();
-    const sonuc = await pool.request()
+
+    // Doktor var mı?
+    const doktorSonuc = await pool.request()
       .input('id', sql.Int, req.params.id)
-      .query('SELECT Aktif FROM Doktorlar WHERE DoktorID = @id');
+      .query(`
+        SELECT d.DoktorID, k.Ad + ' ' + k.Soyad AS DoktorAdi
+        FROM Doktorlar d
+        JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
+        WHERE d.DoktorID = @id
+      `);
 
-    if (sonuc.recordset.length === 0) return res.status(404).json({ hata: 'Doktor bulunamadı' });
+    if (doktorSonuc.recordset.length === 0) {
+      return res.status(404).json({ hata: 'Doktor bulunamadı' });
+    }
 
-    const yeniAktif = sonuc.recordset[0].Aktif ? 0 : 1;
+    const doktorAdi = doktorSonuc.recordset[0].DoktorAdi;
+
+    // Durumu güncelle
     await pool.request()
       .input('id', sql.Int, req.params.id)
-      .input('aktif', sql.Bit, yeniAktif)
-      .query('UPDATE Doktorlar SET Aktif = @aktif WHERE DoktorID = @id');
+      .input('durum', sql.NVarChar, durum)
+      .input('izinBaslangic', sql.DateTime, planliIzin ? new Date(izinBaslangic) : null)
+      .input('izinBitis', sql.DateTime, planliIzin ? new Date(izinBitis) : null)
+      .query(`
+        UPDATE Doktorlar
+        SET Durum = @durum,
+            IzinBaslangic = @izinBaslangic,
+            IzinBitis = @izinBitis
+        WHERE DoktorID = @id
+      `);
 
-    res.json({ aktif: yeniAktif });
+    // Anlık izin veya Ayrıldı → gelecekteki randevuları iptal et, bildirim gönder
+    if (!planliIzin && durum !== 'Aktif') {
+      const randevular = await pool.request()
+        .input('doktorId', sql.Int, req.params.id)
+        .query(`
+          SELECT r.RandevuID, h.KullaniciID AS hastaKullaniciId,
+                 CONVERT(varchar(10), r.RandevuTarihi, 23) AS tarih
+          FROM Randevular r
+          JOIN Hastalar h ON r.HastaID = h.HastaID
+          WHERE r.DoktorID = @doktorId
+            AND r.RandevuTarihi >= CAST(GETDATE() AS DATE)
+            AND r.Durum IN ('Beklemede', 'Onaylandı')
+        `);
+
+      // Her randevuyu iptal et ve hastaya bildirim gönder
+      for (const randevu of randevular.recordset) {
+        await pool.request()
+          .input('randevuId', sql.Int, randevu.RandevuID)
+          .query("UPDATE Randevular SET Durum = 'İptal' WHERE RandevuID = @randevuId");
+
+        const bildirimMesaj = durum === 'Ayrıldı'
+          ? `Dr. ${doktorAdi} artık görevde değil. ${randevu.tarih} tarihli randevunuz iptal edildi.`
+          : `Dr. ${doktorAdi} izne çıktı. ${randevu.tarih} tarihli randevunuz iptal edildi.`;
+
+        await pool.request()
+          .input('kullaniciId', sql.Int, randevu.hastaKullaniciId)
+          .input('mesaj', sql.NVarChar, bildirimMesaj)
+          .query('INSERT INTO Bildirimler (KullaniciID, Mesaj) VALUES (@kullaniciId, @mesaj)');
+      }
+
+      logger.info(`Doktor durumu değişti: ${doktorAdi} → ${durum} | ${randevular.recordset.length} randevu iptal edildi | admin=${req.kullanici.kullaniciId}`);
+    } else {
+      logger.info(`Doktor durumu değişti: ${doktorAdi} → ${durum}${planliIzin ? ` (${izinBaslangic} - ${izinBitis})` : ''} | admin=${req.kullanici.kullaniciId}`);
+    }
+
+    res.json({ mesaj: `Doktor durumu güncellendi: ${durum}`, durum });
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin doktor durum hatası | doktorId=${req.params.id} adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -355,7 +434,7 @@ router.get('/hastalar', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -369,7 +448,7 @@ router.get('/yoneticiler', async (req, res) => {
     `);
     res.json(r.recordset);
   } catch (err) {
-    console.error(err);
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });

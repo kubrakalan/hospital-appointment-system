@@ -62,8 +62,9 @@ interface AdminDoktor {
   Email: string
   UzmanlikAdi: string
   Telefon: string | null
-  Aktif: boolean
+  Durum: 'Aktif' | 'İzinli' | 'Ayrıldı'
 }
+
 
 interface Yonetici {
   KullaniciID: number
@@ -103,38 +104,46 @@ export default function AdminPaneli() {
   }, [])
 
   async function yukle() {
-    const [ist, r, d, h, y, g, uz, dok, dur, saat, iptal] = await Promise.all([
-      api.adminIstatistikler(),
-      api.adminRandevular(),
-      api.adminDoktorlar(),
-      api.adminHastalar(),
-      api.adminYoneticiler(),
-      api.adminGunlukIstatistik(),
-      api.adminUzmanlikIstatistik(),
-      api.adminDoktorIstatistik(),
-      api.adminDurumIstatistik(),
-      api.adminSaatIstatistik(),
-      api.adminIptalListesi(),
-    ])
-    setIstatistik(ist)
-    setRandevular(r)
-    setDoktorlar(d)
-    setHastalar(h)
-    setYoneticiler(y)
-    setGunlukVeri(g)
-    setUzmanlikVeri(uz)
-    setDoktorVeri(dok)
-    setDurumVeri(dur)
-    setSaatVeri(saat)
-    setIptalListesi(iptal)
+    try {
+      const [ist, r, d, h, y, g, uz, dok, dur, saat, iptal] = await Promise.all([
+        api.adminIstatistikler(),
+        api.adminRandevular(),
+        api.adminDoktorlar(),
+        api.adminHastalar(),
+        api.adminYoneticiler(),
+        api.adminGunlukIstatistik(),
+        api.adminUzmanlikIstatistik(),
+        api.adminDoktorIstatistik(),
+        api.adminDurumIstatistik(),
+        api.adminSaatIstatistik(),
+        api.adminIptalListesi(),
+      ])
+      setIstatistik(ist)
+      setRandevular(r)
+      setDoktorlar(d)
+      setHastalar(h)
+      setYoneticiler(y)
+      setGunlukVeri(g)
+      setUzmanlikVeri(uz)
+      setDoktorVeri(dok)
+      setDurumVeri(dur)
+      setSaatVeri(saat)
+      setIptalListesi(iptal)
+    } catch (err: unknown) {
+      console.error('Admin verileri yüklenemedi:', err)
+    }
   }
 
   function cikis() { cikisYap(); navigate('/giris') }
 
   async function randevuDurum(id: number, durum: string) {
     await api.adminRandevuDurum(id, durum)
-    setRandevular(prev => prev.map(r => r.RandevuID === id ? { ...r, Durum: durum } : r))
-    setIstatistik(prev => ({ ...prev, bekleyen: randevular.filter(r => r.Durum === 'Beklemede').length }))
+    setRandevular(prev => {
+      const guncellendi = prev.map(r => r.RandevuID === id ? { ...r, Durum: durum } : r)
+      const bekleyen = guncellendi.filter(r => r.Durum === 'Beklemede').length
+      setIstatistik(ist => ({ ...ist, bekleyen }))
+      return guncellendi
+    })
   }
 
   async function randevuSil(id: number) {
@@ -164,9 +173,17 @@ export default function AdminPaneli() {
     setDoktorlar(prev => prev.filter(d => d.DoktorID !== id))
   }
 
-  async function doktorAktifToggle(id: number) {
-    const sonuc = await api.adminDoktorAktifToggle(id)
-    setDoktorlar(prev => prev.map(d => d.DoktorID === id ? { ...d, Aktif: sonuc.aktif === 1 } : d))
+  const [durumFormu, setDurumFormu] = useState<{ doktorId: number | null, durum: string, izinBaslangic: string, izinBitis: string }>({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })
+
+  async function doktorDurumGuncelle() {
+    if (!durumFormu.doktorId) return
+    try {
+      await api.adminDoktorDurumGuncelle(durumFormu.doktorId, durumFormu.durum, durumFormu.izinBaslangic || undefined, durumFormu.izinBitis || undefined)
+      setDoktorlar(prev => prev.map(d => d.DoktorID === durumFormu.doktorId ? { ...d, Durum: durumFormu.durum as AdminDoktor['Durum'] } : d))
+      setDurumFormu({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Hata oluştu')
+    }
   }
 
   const filtreliRandevular = randevular.filter(r => {
@@ -304,25 +321,88 @@ export default function AdminPaneli() {
 
             <div className="flex flex-col gap-3">
               {doktorlar.map((d) => (
-                <div key={d.DoktorID} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 transition">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-2xl shrink-0">👨‍⚕️</span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {d.Ad} {d.Soyad}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${d.Aktif ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-                          {d.Aktif ? 'Aktif' : 'Pasif'}
-                        </span>
+                <div key={d.DoktorID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                  {/* Doktor satırı */}
+                  <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-2xl shrink-0">👨‍⚕️</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {d.Ad} {d.Soyad}</p>
+                          {/* Durum badge — renge göre değişiyor */}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            d.Durum === 'Aktif'   ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+                            d.Durum === 'İzinli'  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' :
+                                                    'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                          }`}>
+                            {d.Durum}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{d.UzmanlikAdi} · {d.Email}</p>
                       </div>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{d.UzmanlikAdi} · {d.Email}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Durum Değiştir butonu — forma aç/kapat */}
+                      <button
+                        onClick={() => setDurumFormu(
+                          durumFormu.doktorId === d.DoktorID
+                            ? { doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' }
+                            : { doktorId: d.DoktorID, durum: d.Durum, izinBaslangic: '', izinBitis: '' }
+                        )}
+                        className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition"
+                      >
+                        Durum Değiştir
+                      </button>
+                      <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">Kaldır</button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => doktorAktifToggle(d.DoktorID)} className={`text-xs px-3 py-1.5 rounded-lg transition ${d.Aktif ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-200' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200'}`}>
-                      {d.Aktif ? 'Pasife Al' : 'Aktife Al'}
-                    </button>
-                    <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">Kaldır</button>
-                  </div>
+
+                  {/* Durum değiştirme formu — sadece bu doktor için açık */}
+                  {durumFormu.doktorId === d.DoktorID && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 p-4">
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">Durum Güncelle — Dr. {d.Ad} {d.Soyad}</p>
+                      <div className="flex flex-wrap gap-3 items-end">
+                        {/* Durum seçimi */}
+                        <div>
+                          <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Durum</label>
+                          <select
+                            value={durumFormu.durum}
+                            onChange={e => setDurumFormu({ ...durumFormu, durum: e.target.value })}
+                            className={inputCls + ' w-36'}
+                          >
+                            <option value="Aktif">Aktif</option>
+                            <option value="İzinli">İzinli</option>
+                            <option value="Ayrıldı">Ayrıldı</option>
+                          </select>
+                        </div>
+
+                        {/* Planlı izin tarihleri — sadece İzinli seçilince göster */}
+                        {durumFormu.durum === 'İzinli' && (
+                          <>
+                            <div>
+                              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">İzin Başlangıç</label>
+                              <input type="date" value={durumFormu.izinBaslangic} onChange={e => setDurumFormu({ ...durumFormu, izinBaslangic: e.target.value })} className={inputCls + ' w-40'} />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">İzin Bitiş</label>
+                              <input type="date" value={durumFormu.izinBitis} onChange={e => setDurumFormu({ ...durumFormu, izinBitis: e.target.value })} className={inputCls + ' w-40'} />
+                            </div>
+                          </>
+                        )}
+
+                        <div className="flex gap-2">
+                          <button onClick={doktorDurumGuncelle} className="text-xs bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium">Kaydet</button>
+                          <button onClick={() => setDurumFormu({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-2">Vazgeç</button>
+                        </div>
+                      </div>
+                      {/* Anlık izin / Ayrıldı uyarısı */}
+                      {(durumFormu.durum === 'Ayrıldı' || (durumFormu.durum === 'İzinli' && !durumFormu.izinBaslangic)) && (
+                        <p className="text-xs text-red-500 mt-2">
+                          ⚠️ {durumFormu.durum === 'Ayrıldı' ? 'Doktorun tüm gelecek randevuları iptal edilecek.' : 'Tarih girilmezse anlık izin olarak işlenir — tüm randevular iptal edilir.'}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
