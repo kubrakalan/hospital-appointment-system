@@ -453,4 +453,146 @@ router.get('/yoneticiler', async (req, res) => {
   }
 });
 
+// ============================================================
+// GET /api/admin/istatistikler/ozet
+// En çok iptal eden hasta, en meşgul doktor, en yoğun uzmanlık
+// ============================================================
+router.get('/istatistikler/ozet', async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    const [iptalHasta, mesgulDoktor, yogunUzmanlik] = await Promise.all([
+      // En çok iptal eden 5 hasta
+      pool.request().query(`
+        SELECT TOP 5
+          k.Ad + ' ' + k.Soyad AS hastaAdi,
+          COUNT(*) AS iptalSayisi
+        FROM Randevular r
+        JOIN Hastalar h ON r.HastaID = h.HastaID
+        JOIN Kullaniciler k ON h.KullaniciID = k.KullaniciID
+        WHERE r.Durum = 'İptal'
+        GROUP BY k.Ad, k.Soyad
+        ORDER BY iptalSayisi DESC
+      `),
+      // En meşgul 5 doktor (tamamlanan randevu sayısına göre)
+      pool.request().query(`
+        SELECT TOP 5
+          kd.Ad + ' ' + kd.Soyad AS doktorAdi,
+          u.UzmanlikAdi,
+          COUNT(*) AS randevuSayisi
+        FROM Randevular r
+        JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        JOIN Kullaniciler kd ON d.KullaniciID = kd.KullaniciID
+        JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+        WHERE r.Durum IN ('Tamamlandı', 'Onaylandı', 'Beklemede')
+        GROUP BY kd.Ad, kd.Soyad, u.UzmanlikAdi
+        ORDER BY randevuSayisi DESC
+      `),
+      // En yoğun 5 uzmanlık
+      pool.request().query(`
+        SELECT TOP 5
+          u.UzmanlikAdi,
+          COUNT(*) AS randevuSayisi
+        FROM Randevular r
+        JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+        WHERE r.Durum != 'İptal'
+        GROUP BY u.UzmanlikAdi
+        ORDER BY randevuSayisi DESC
+      `),
+    ]);
+
+    res.json({
+      enCokIptalEdenHastalar: iptalHasta.recordset,
+      enMesgulDoktorlar: mesgulDoktor.recordset,
+      enYogunUzmanliklar: yogunUzmanlik.recordset,
+    });
+  } catch (err) {
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// GET /api/admin/raporlar/csv?durum=X&tarihBas=Y&tarihBit=Z
+// Randevuları CSV olarak indir
+// ============================================================
+router.get('/raporlar/csv', async (req, res) => {
+  const { durum, tarihBas, tarihBit } = req.query;
+
+  try {
+    const pool = await getPool();
+
+    const istek = pool.request();
+    let where = '1=1';
+
+    if (durum && durum !== 'Tümü') {
+      istek.input('durum', sql.NVarChar, durum);
+      where += ' AND r.Durum = @durum';
+    }
+    if (tarihBas) {
+      istek.input('tarihBas', sql.NVarChar, tarihBas);
+      where += ' AND CAST(r.RandevuTarihi AS DATE) >= CAST(@tarihBas AS DATE)';
+    }
+    if (tarihBit) {
+      istek.input('tarihBit', sql.NVarChar, tarihBit);
+      where += ' AND CAST(r.RandevuTarihi AS DATE) <= CAST(@tarihBit AS DATE)';
+    }
+
+    const sonuc = await istek.query(`
+      SELECT
+        r.RandevuID,
+        kh.Ad + ' ' + kh.Soyad AS HastaAdi,
+        kh.Email AS HastaEmail,
+        kd.Ad + ' ' + kd.Soyad AS DoktorAdi,
+        u.UzmanlikAdi,
+        CONVERT(varchar(10), r.RandevuTarihi, 23) AS Tarih,
+        CONVERT(varchar(5), r.RandevuSaati, 108) AS Saat,
+        r.Durum,
+        ISNULL(r.Notlar, '') AS Notlar
+      FROM Randevular r
+      JOIN Hastalar h ON r.HastaID = h.HastaID
+      JOIN Kullaniciler kh ON h.KullaniciID = kh.KullaniciID
+      JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+      JOIN Kullaniciler kd ON d.KullaniciID = kd.KullaniciID
+      JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+      WHERE ${where}
+      ORDER BY r.RandevuTarihi DESC, r.RandevuSaati DESC
+    `);
+
+    // CSV oluştur
+    const satirlar = sonuc.recordset;
+    const baslik = 'RandevuID,HastaAdı,HastaEmail,DoktorAdı,Uzmanlık,Tarih,Saat,Durum,Notlar';
+    const icerik = satirlar.map(r =>
+      [r.RandevuID, `"${r.HastaAdi}"`, r.HastaEmail, `"${r.DoktorAdi}"`,
+       r.UzmanlikAdi, r.Tarih, r.Saat, r.Durum, `"${r.Notlar}"`].join(',')
+    ).join('\n');
+
+    const csv = '\uFEFF' + baslik + '\n' + icerik; // BOM: Excel Türkçe karakter desteği
+
+    logger.info(`CSV raporu indirildi | adminId=${req.kullanici.kullaniciId} satirSayisi=${satirlar.length} ip=${req.ip}`);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="randevular_${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    logger.error(`CSV rapor hatası | adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// POST /api/admin/test/email-hatirlatma
+// Email hatırlatma sistemini manuel tetikler (test için)
+// ============================================================
+router.post('/test/email-hatirlatma', async (req, res) => {
+  const { hatirlatmalarıGonder } = require('../emailHatirlatma');
+  try {
+    await hatirlatmalarıGonder();
+    res.json({ mesaj: 'Email hatırlatma çalıştırıldı, logları kontrol et' });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
 module.exports = router;
