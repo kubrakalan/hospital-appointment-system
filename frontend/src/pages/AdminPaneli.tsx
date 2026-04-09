@@ -93,8 +93,17 @@ export default function AdminPaneli() {
   const [durumVeri, setDurumVeri] = useState<{ isim: string; sayi: number }[]>([])
   const [saatVeri, setSaatVeri] = useState<{ saat: string; sayi: number }[]>([])
   const [iptalListesi, setIptalListesi] = useState<{ hastaAdi: string; doktorAdi: string; uzmanlikAdi: string; tarih: string }[]>([])
+  const [ozetIst, setOzetIst] = useState<{
+    enCokIptalEdenHastalar: { hastaAdi: string; iptalSayisi: number }[]
+    enMesgulDoktorlar: { doktorAdi: string; uzmanlikAdi: string; randevuSayisi: number }[]
+    enYogunUzmanliklar: { UzmanlikAdi: string; randevuSayisi: number }[]
+  } | null>(null)
+  const [csvYukleniyor, setCsvYukleniyor] = useState(false)
   const [aramaMetni, setAramaMetni] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('Tümü')
+  const [tarihBas, setTarihBas] = useState('')
+  const [tarihBit, setTarihBit] = useState('')
+  const [hastaArama, setHastaArama] = useState('')
   const [doktorFormu, setDoktorFormu] = useState(false)
   const [yeniDoktor, setYeniDoktor] = useState(bos)
   const [formHata, setFormHata] = useState('')
@@ -105,7 +114,7 @@ export default function AdminPaneli() {
 
   async function yukle() {
     try {
-      const [ist, r, d, h, y, g, uz, dok, dur, saat, iptal] = await Promise.all([
+      const [ist, r, d, h, y, g, uz, dok, dur, saat, iptal, ozet] = await Promise.all([
         api.adminIstatistikler(),
         api.adminRandevular(),
         api.adminDoktorlar(),
@@ -117,6 +126,7 @@ export default function AdminPaneli() {
         api.adminDurumIstatistik(),
         api.adminSaatIstatistik(),
         api.adminIptalListesi(),
+        api.adminOzetIstatistik(),
       ])
       setIstatistik(ist)
       setRandevular(r)
@@ -129,6 +139,7 @@ export default function AdminPaneli() {
       setDurumVeri(dur)
       setSaatVeri(saat)
       setIptalListesi(iptal)
+      setOzetIst(ozet)
     } catch (err: unknown) {
       console.error('Admin verileri yüklenemedi:', err)
     }
@@ -190,8 +201,15 @@ export default function AdminPaneli() {
     const aramaUygun = r.HastaAdi?.toLowerCase().includes(aramaMetni.toLowerCase()) ||
                        r.DoktorAdi?.toLowerCase().includes(aramaMetni.toLowerCase())
     const durumUygun = durumFiltre === 'Tümü' || r.Durum === durumFiltre
-    return aramaUygun && durumUygun
+    const tarih = r.RandevuTarihi.split('T')[0]
+    const basUygun = !tarihBas || tarih >= tarihBas
+    const bitUygun = !tarihBit || tarih <= tarihBit
+    return aramaUygun && durumUygun && basUygun && bitUygun
   })
+
+  const filtreliHastalar = hastalar.filter(h =>
+    `${h.Ad} ${h.Soyad} ${h.Email}`.toLowerCase().includes(hastaArama.toLowerCase())
+  )
 
   const inputCls = "w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
 
@@ -245,17 +263,47 @@ export default function AdminPaneli() {
         {/* RANDEVULAR */}
         {aktifSekme === 'randevular' && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row gap-3 mb-6">
-              <input type="text" placeholder="Hasta veya doktor ara..." value={aramaMetni} onChange={e => setAramaMetni(e.target.value)}
-                className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 placeholder-gray-400" />
-              <select value={durumFiltre} onChange={e => setDurumFiltre(e.target.value)}
-                className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option>Tümü</option>
-                <option>Beklemede</option>
-                <option>Onaylandı</option>
-                <option>Tamamlandı</option>
-                <option>İptal</option>
-              </select>
+            <div className="flex flex-col gap-3 mb-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input type="text" placeholder="Hasta veya doktor ara..." value={aramaMetni} onChange={e => setAramaMetni(e.target.value)}
+                  className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 placeholder-gray-400" />
+                <select value={durumFiltre} onChange={e => setDurumFiltre(e.target.value)}
+                  className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option>Tümü</option>
+                  <option>Beklemede</option>
+                  <option>Onaylandı</option>
+                  <option>Tamamlandı</option>
+                  <option>İptal</option>
+                </select>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Tarih:</span>
+                  <input type="date" value={tarihBas} onChange={e => setTarihBas(e.target.value)}
+                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
+                  <span className="text-xs text-gray-400 shrink-0">—</span>
+                  <input type="date" value={tarihBit} onChange={e => setTarihBit(e.target.value)}
+                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
+                </div>
+                {(aramaMetni || durumFiltre !== 'Tümü' || tarihBas || tarihBit) && (
+                  <button onClick={() => { setAramaMetni(''); setDurumFiltre('Tümü'); setTarihBas(''); setTarihBit('') }}
+                    className="text-xs text-gray-400 hover:text-red-500 transition shrink-0">
+                    Filtreleri Temizle ✕
+                  </button>
+                )}
+                <button
+                  onClick={async () => {
+                    setCsvYukleniyor(true)
+                    try { await api.adminCsvIndir(durumFiltre, tarihBas, tarihBit) }
+                    catch { alert('CSV indirilemedi') }
+                    finally { setCsvYukleniyor(false) }
+                  }}
+                  disabled={csvYukleniyor}
+                  className="text-xs bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50 shrink-0"
+                >
+                  {csvYukleniyor ? 'İndiriliyor...' : '⬇ CSV İndir'}
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -412,10 +460,14 @@ export default function AdminPaneli() {
         {/* HASTALAR */}
         {aktifSekme === 'hastalar' && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Hasta Listesi</h2>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Hasta Listesi</h2>
+              <input type="text" placeholder="İsim veya e-posta ara..." value={hastaArama} onChange={e => setHastaArama(e.target.value)}
+                className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full sm:w-64 placeholder-gray-400" />
+            </div>
             <div className="flex flex-col gap-3">
-              {hastalar.length === 0 && <p className="text-center text-gray-400 py-8">Hasta bulunamadı.</p>}
-              {hastalar.map((h) => (
+              {filtreliHastalar.length === 0 && <p className="text-center text-gray-400 py-8">Hasta bulunamadı.</p>}
+              {filtreliHastalar.map((h) => (
                 <div key={h.HastaID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
                   <button
                     onClick={() => setAcikHastaId(acikHastaId === h.HastaID ? null : h.HastaID)}
@@ -636,6 +688,71 @@ export default function AdminPaneli() {
               </div>
 
             </div>
+
+            {/* ÖZET İSTATİSTİKLER */}
+            {ozetIst && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+
+                {/* En çok iptal eden hastalar */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Çok İptal Eden Hastalar</h2>
+                  <p className="text-gray-400 text-xs mb-4">İlk 5 hasta</p>
+                  {ozetIst.enCokIptalEdenHastalar.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-4">Veri yok</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {ozetIst.enCokIptalEdenHastalar.map((h, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700 dark:text-gray-200 truncate">{h.hastaAdi}</span>
+                          <span className="text-red-500 font-semibold shrink-0 ml-2">{h.iptalSayisi} iptal</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* En meşgul doktorlar */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Meşgul Doktorlar</h2>
+                  <p className="text-gray-400 text-xs mb-4">Aktif randevu sayısına göre</p>
+                  {ozetIst.enMesgulDoktorlar.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-4">Veri yok</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {ozetIst.enMesgulDoktorlar.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <div className="min-w-0">
+                            <p className="text-gray-700 dark:text-gray-200 truncate">{d.doktorAdi}</p>
+                            <p className="text-gray-400 text-xs truncate">{d.uzmanlikAdi}</p>
+                          </div>
+                          <span className="text-blue-500 font-semibold shrink-0 ml-2">{d.randevuSayisi}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* En yoğun uzmanlıklar */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Yoğun Uzmanlıklar</h2>
+                  <p className="text-gray-400 text-xs mb-4">İptal hariç randevu sayısı</p>
+                  {ozetIst.enYogunUzmanliklar.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-4">Veri yok</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {ozetIst.enYogunUzmanliklar.map((u, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700 dark:text-gray-200 truncate">{u.UzmanlikAdi}</span>
+                          <span className="text-green-600 font-semibold shrink-0 ml-2">{u.randevuSayisi}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+
           </div>
         )}
 
