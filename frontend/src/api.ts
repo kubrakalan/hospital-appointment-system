@@ -107,11 +107,17 @@ export const api = {
   doktorlar: () =>
     istek('/randevular/doktorlar'),
 
+  doluSaatler: (doktorId: number, tarih: string) =>
+    istek(`/randevular/dolu-saatler?doktorId=${doktorId}&tarih=${tarih}`),
+
   randevuAl: (doktorId: number, tarih: string, saat: string, notlar?: string) =>
     istek('/randevular', { method: 'POST', body: JSON.stringify({ doktorId, tarih, saat: saat + ':00', notlar }) }),
 
   randevuIptal: (id: number) =>
     istek(`/randevular/${id}/iptal`, { method: 'PATCH' }),
+
+  sifreDegistir: (eskiSifre: string, yeniSifre: string) =>
+    istek('/randevular/sifre-degistir', { method: 'PATCH', body: JSON.stringify({ eskiSifre, yeniSifre }) }),
 
   // Hasta — tıbbi kayıt (DoktorNotu gösterilmez)
   tibbiBilgiHasta: (randevuId: number) =>
@@ -124,6 +130,11 @@ export const api = {
     istek(`/doktor/randevular/${id}/durum`, { method: 'PATCH', body: JSON.stringify({ durum }) }),
   doktorTibbiBilgiGetir: (randevuId: number) =>
     istek(`/doktor/randevular/${randevuId}/tibbi-kayit`),
+  doktorCalismaSaatleri: () =>
+    istek('/doktor/calisma-saatleri'),
+  doktorCalismaSaatleriGuncelle: (saatler: { gun: string; baslangicSaat: string; bitisSaat: string }[]) =>
+    istek('/doktor/calisma-saatleri', { method: 'PUT', body: JSON.stringify({ saatler }) }),
+
   doktorTibbiBilgiKaydet: (randevuId: number, data: {
     tani?: string; uygulananIslem?: string; recete?: string;
     labNotu?: string; doktorNotu?: string; sonrakiKontrol?: string;
@@ -163,4 +174,28 @@ export const api = {
     istek('/admin/istatistikler/saat', {}, true),
   adminIptalListesi: () =>
     istek('/admin/istatistikler/iptal', {}, true),
+  adminOzetIstatistik: () =>
+    istek('/admin/istatistikler/ozet', {}, true),
+  adminCsvIndir: async (durum?: string, tarihBas?: string, tarihBit?: string) => {
+    const params = new URLSearchParams()
+    if (durum && durum !== 'Tümü') params.set('durum', durum)
+    if (tarihBas) params.set('tarihBas', tarihBas)
+    if (tarihBit) params.set('tarihBit', tarihBit)
+    const token = localStorage.getItem('token')
+    const ADMIN_BASIC = btoa(`${import.meta.env.VITE_ADMIN_BASIC_USER}:${import.meta.env.VITE_ADMIN_BASIC_PASS}`)
+    const res = await fetch(`http://localhost:3000/api/admin/raporlar/csv?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Admin-Auth': `Basic ${ADMIN_BASIC}`,
+      },
+    })
+    if (!res.ok) throw new Error('CSV indirilemedi')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `randevular_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
 };

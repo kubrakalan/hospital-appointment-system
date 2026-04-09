@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
 const randevuLogger = require('../randevuLogger');
@@ -68,6 +69,45 @@ router.get('/doktorlar', async (req, res) => {
     res.json(sonuc.recordset);
   } catch (err) {
     logger.error(`Randevular hatası | endpoint="${req.method} ${req.path}" kullaniciId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// GET /api/randevular/dolu-saatler?doktorId=X&tarih=YYYY-MM-DD
+// O doktora o günkü dolu saatleri döndürür
+// ============================================================
+router.get('/dolu-saatler', async (req, res) => {
+  const { doktorId, tarih } = req.query;
+
+  if (!doktorId || !tarih) {
+    return res.status(400).json({ hata: 'doktorId ve tarih zorunludur' });
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tarih)) {
+    return res.status(400).json({ hata: 'Geçersiz tarih formatı' });
+  }
+
+  try {
+    const pool = await getPool();
+
+    // O doktora o günkü iptal edilmemiş randevuların saatlerini getir
+    const sonuc = await pool.request()
+      .input('doktorId', sql.Int, doktorId)
+      .input('tarih', sql.NVarChar, tarih)
+      .query(`
+        SELECT CONVERT(varchar(5), RandevuSaati, 108) AS saat
+        FROM Randevular
+        WHERE DoktorID = @doktorId
+          AND CAST(RandevuTarihi AS DATE) = CAST(@tarih AS DATE)
+          AND Durum != 'İptal'
+      `);
+
+    // Sadece saat listesi döndür: ["09:00", "11:00"]
+    const doluSaatler = sonuc.recordset.map(r => r.saat);
+    res.json(doluSaatler);
+  } catch (err) {
+    logger.error(`Dolu saatler hatası | endpoint="${req.method} ${req.path}" kullaniciId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
@@ -311,6 +351,53 @@ router.get('/:id/tibbi-kayit', async (req, res) => {
     res.json(sonuc.recordset[0] || null);
   } catch (err) {
     logger.error(`Tıbbi kayıt getirme hatası: ${err.message}`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// PATCH /api/randevular/sifre-degistir
+// Giriş yapan kullanıcı kendi şifresini değiştirir
+// ============================================================
+router.patch('/sifre-degistir', async (req, res) => {
+  const { eskiSifre, yeniSifre } = req.body;
+
+  if (!eskiSifre || !yeniSifre) {
+    return res.status(400).json({ hata: 'Eski ve yeni şifre zorunludur' });
+  }
+  if (yeniSifre.length < 6) {
+    return res.status(400).json({ hata: 'Yeni şifre en az 6 karakter olmalıdır' });
+  }
+  if (eskiSifre === yeniSifre) {
+    return res.status(400).json({ hata: 'Yeni şifre eskisiyle aynı olamaz' });
+  }
+
+  try {
+    const pool = await getPool();
+
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query('SELECT SifreHash FROM Kullaniciler WHERE KullaniciID = @kullaniciId');
+
+    if (sonuc.recordset.length === 0) {
+      return res.status(404).json({ hata: 'Kullanıcı bulunamadı' });
+    }
+
+    const eslesti = await bcrypt.compare(eskiSifre, sonuc.recordset[0].SifreHash);
+    if (!eslesti) {
+      return res.status(400).json({ hata: 'Mevcut şifre yanlış' });
+    }
+
+    const yeniHash = await bcrypt.hash(yeniSifre, 10);
+    await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .input('sifreHash', sql.NVarChar, yeniHash)
+      .query('UPDATE Kullaniciler SET SifreHash = @sifreHash WHERE KullaniciID = @kullaniciId');
+
+    logger.info(`ŞİFRE DEĞİŞTİRİLDİ | kullaniciId=${req.kullanici.kullaniciId} ip=${req.ip}`);
+    res.json({ mesaj: 'Şifreniz başarıyla güncellendi' });
+  } catch (err) {
+    logger.error(`Şifre değiştirme hatası | kullaniciId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
