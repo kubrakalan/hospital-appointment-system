@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  ActivityIndicator, RefreshControl,
+  RefreshControl,
 } from 'react-native';
 import { api } from '../../api';
+import { useTheme } from '../../theme';
+import { KartSkeleton } from '../../components/Skeleton';
 
 interface Randevu {
   RandevuID: number;
@@ -29,6 +31,7 @@ function tarihFormatla(tarih: string) {
 }
 
 export default function TibbiGecmisEkrani() {
+  const { c } = useTheme();
   const [kayitlar, setKayitlar] = useState<{ randevu: Randevu; tibbi: TibbiBilgi | null }[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [yenileniyor, setYenileniyor] = useState(false);
@@ -36,9 +39,8 @@ export default function TibbiGecmisEkrani() {
   const yukle = useCallback(async () => {
     try {
       const data = await api.randevularim();
-      const tamamlananlar: Randevu[] = (data.randevular || []).filter(
-        (r: Randevu) => r.Durum === 'Tamamlandı' || r.Durum === 'Gelmedi'
-      );
+      const liste: Randevu[] = Array.isArray(data) ? data : [];
+      const tamamlananlar = liste.filter(r => r.Durum === 'Tamamlandı' || r.Durum === 'Gelmedi');
       const sonuclar = await Promise.all(
         tamamlananlar.map(async (rv) => {
           try {
@@ -59,35 +61,44 @@ export default function TibbiGecmisEkrani() {
 
   useEffect(() => { yukle(); }, [yukle]);
 
-  if (yukleniyor) return <View style={styles.orta}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
+  if (yukleniyor) {
+    return (
+      <ScrollView style={[styles.kapsayici, { backgroundColor: c.bg }]} contentContainerStyle={{ padding: 16 }}>
+        {[1, 2, 3].map(i => <KartSkeleton key={i} />)}
+      </ScrollView>
+    );
+  }
 
   if (kayitlar.length === 0) {
     return (
-      <View style={styles.orta}>
+      <View style={[styles.orta, { backgroundColor: c.bg }]}>
         <Text style={styles.bosEmoji}>🗂️</Text>
-        <Text style={styles.bosYazi}>Henüz tamamlanmış randevunuz yok.</Text>
+        <Text style={[styles.bosYazi, { color: c.textFaint }]}>Henüz tamamlanmış randevunuz yok.</Text>
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={styles.kapsayici}
+      style={[styles.kapsayici, { backgroundColor: c.bg }]}
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
-      refreshControl={<RefreshControl refreshing={yenileniyor} onRefresh={() => { setYenileniyor(true); yukle(); }} />}
+      refreshControl={<RefreshControl refreshing={yenileniyor} onRefresh={() => { setYenileniyor(true); yukle(); }} tintColor="#0ea5e9" />}
     >
       {kayitlar.map(({ randevu, tibbi }) => (
-        <View key={randevu.RandevuID} style={styles.kart}>
-          <View style={styles.kartBaslik}>
+        <View key={randevu.RandevuID} style={[styles.kart, { backgroundColor: c.card }]}>
+          <View style={[styles.kartBaslik, { borderBottomColor: c.border }]}>
             <View>
-              <Text style={styles.doktorAd}>Dr. {randevu.DoktorAdi}</Text>
-              <Text style={styles.uzmanlik}>{randevu.UzmanlikAdi}</Text>
+              <Text style={[styles.doktorAd, { color: c.text }]}>Dr. {randevu.DoktorAdi}</Text>
+              <Text style={[styles.uzmanlik, { color: c.textMuted }]}>{randevu.UzmanlikAdi}</Text>
             </View>
-            <Text style={styles.tarih}>{tarihFormatla(randevu.RandevuTarihi)}</Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.tarih, { color: c.textMuted }]}>{tarihFormatla(randevu.RandevuTarihi)}</Text>
+              <Text style={[styles.saat, { color: c.textFaint }]}>{String(randevu.RandevuSaati).substring(0, 5)}</Text>
+            </View>
           </View>
 
           {!tibbi ? (
-            <Text style={styles.bosKayit}>Bu randevu için tıbbi kayıt girilmemiş.</Text>
+            <Text style={[styles.bosKayit, { color: c.textFaint }]}>Bu randevu için tıbbi kayıt girilmemiş.</Text>
           ) : (
             <View style={styles.bilgiGrid}>
               {[
@@ -97,9 +108,9 @@ export default function TibbiGecmisEkrani() {
                 { icon: '🧪', label: 'Lab / Tahlil', deger: tibbi.LabNotu },
                 { icon: '📅', label: 'Sonraki Kontrol', deger: tibbi.SonrakiKontrol ? tarihFormatla(tibbi.SonrakiKontrol) : null },
               ].filter(f => f.deger).map(f => (
-                <View key={f.label} style={styles.bilgiSatir}>
-                  <Text style={styles.bilgiLabel}>{f.icon} {f.label}</Text>
-                  <Text style={styles.bilgiDeger}>{f.deger}</Text>
+                <View key={f.label} style={[styles.bilgiSatir, { backgroundColor: c.surface }]}>
+                  <Text style={[styles.bilgiLabel, { color: c.textMuted }]}>{f.icon} {f.label}</Text>
+                  <Text style={[styles.bilgiDeger, { color: c.text }]}>{f.deger}</Text>
                 </View>
               ))}
             </View>
@@ -111,22 +122,25 @@ export default function TibbiGecmisEkrani() {
 }
 
 const styles = StyleSheet.create({
-  kapsayici: { flex: 1, backgroundColor: '#f0f9ff' },
-  orta: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f9ff' },
+  kapsayici: { flex: 1 },
+  orta: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   bosEmoji: { fontSize: 48, marginBottom: 12 },
-  bosYazi: { color: '#9ca3af', fontSize: 15 },
+  bosYazi: { fontSize: 15 },
   kart: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    marginBottom: 14, shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.07, shadowRadius: 4, elevation: 2,
+    borderRadius: 14, padding: 16, marginBottom: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.07, shadowRadius: 4, elevation: 2,
   },
-  kartBaslik: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  doktorAd: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  uzmanlik: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  tarih: { fontSize: 12, color: '#6b7280' },
-  bosKayit: { color: '#9ca3af', fontSize: 13, fontStyle: 'italic' },
-  bilgiGrid: { gap: 10 },
-  bilgiSatir: { backgroundColor: '#f8fafc', borderRadius: 10, padding: 12 },
-  bilgiLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 4 },
-  bilgiDeger: { fontSize: 13, color: '#1f2937', lineHeight: 20 },
+  kartBaslik: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1,
+  },
+  doktorAd: { fontSize: 15, fontWeight: '700' },
+  uzmanlik: { fontSize: 12, marginTop: 2 },
+  tarih: { fontSize: 12, fontWeight: '600' },
+  saat: { fontSize: 11, marginTop: 2 },
+  bosKayit: { fontSize: 13, fontStyle: 'italic' },
+  bilgiGrid: { gap: 8 },
+  bilgiSatir: { borderRadius: 10, padding: 12 },
+  bilgiLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
+  bilgiDeger: { fontSize: 13, lineHeight: 20 },
 });

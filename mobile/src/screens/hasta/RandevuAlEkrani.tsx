@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, TextInput,
 } from 'react-native';
 import { api } from '../../api';
+import { useTheme } from '../../theme';
 
 interface Doktor {
   DoktorID: number;
@@ -12,7 +13,7 @@ interface Doktor {
   Durum: string;
 }
 
-const SAATLER = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
+const TUM_SAATLER = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
 
 function bugundenItibaren(gunSonra = 1) {
   const d = new Date();
@@ -21,20 +22,34 @@ function bugundenItibaren(gunSonra = 1) {
 }
 
 export default function RandevuAlEkrani() {
+  const { c } = useTheme();
   const [doktorlar, setDoktorlar] = useState<Doktor[]>([]);
   const [seciliDoktor, setSeciliDoktor] = useState<Doktor | null>(null);
   const [tarih, setTarih] = useState('');
   const [saat, setSaat] = useState('');
   const [notlar, setNotlar] = useState('');
+  const [uzmanlik, setUzmanlik] = useState('');
   const [yukleniyor, setYukleniyor] = useState(true);
   const [gonderiyor, setGonderiyor] = useState(false);
-  const [uzmanlik, setUzmanlik] = useState('');
+  const [doluSaatler, setDoluSaatler] = useState<string[]>([]);
+  const [saatYukleniyor, setSaatYukleniyor] = useState(false);
 
   useEffect(() => {
     api.doktorlar().then((d: Doktor[]) => {
       setDoktorlar(d.filter(dok => dok.Durum === 'Aktif'));
     }).finally(() => setYukleniyor(false));
   }, []);
+
+  // Doktor ve tarih seçildiğinde dolu saatleri çek
+  useEffect(() => {
+    if (!seciliDoktor || !tarih) { setDoluSaatler([]); setSaat(''); return; }
+    setSaatYukleniyor(true);
+    setSaat('');
+    api.doluSaatler(seciliDoktor.DoktorID, tarih)
+      .then((data: string[]) => setDoluSaatler(Array.isArray(data) ? data : []))
+      .catch(() => setDoluSaatler([]))
+      .finally(() => setSaatYukleniyor(false));
+  }, [seciliDoktor, tarih]);
 
   const uzmanliklar = [...new Set(doktorlar.map(d => d.UzmanlikAdi))];
   const filtreliDoktorlar = uzmanlik ? doktorlar.filter(d => d.UzmanlikAdi === uzmanlik) : doktorlar;
@@ -48,7 +63,8 @@ export default function RandevuAlEkrani() {
     try {
       await api.randevuAl(seciliDoktor.DoktorID, tarih, saat, notlar || undefined);
       Alert.alert('Başarılı', 'Randevunuz alındı!', [{ text: 'Tamam' }]);
-      setSeciliDoktor(null); setTarih(''); setSaat(''); setNotlar(''); setUzmanlik('');
+      setSeciliDoktor(null); setTarih(''); setSaat('');
+      setNotlar(''); setUzmanlik(''); setDoluSaatler([]);
     } catch (err: any) {
       Alert.alert('Hata', err.message);
     } finally {
@@ -56,22 +72,22 @@ export default function RandevuAlEkrani() {
     }
   }
 
-  if (yukleniyor) return <View style={styles.orta}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
+  if (yukleniyor) return <View style={[styles.orta, { backgroundColor: c.bg }]}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
 
   return (
-    <ScrollView style={styles.kapsayici} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+    <ScrollView style={[styles.kapsayici, { backgroundColor: c.bg }]} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
 
       {/* Uzmanlık filtresi */}
-      <Text style={styles.etiket}>Uzmanlık Alanı</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-        <View style={{ flexDirection: 'row', gap: 8, paddingRight: 16 }}>
+      <Text style={[styles.etiket, { color: c.textMuted }]}>Uzmanlık Alanı</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           {['Tümü', ...uzmanliklar].map(u => (
             <TouchableOpacity
               key={u}
               onPress={() => { setUzmanlik(u === 'Tümü' ? '' : u); setSeciliDoktor(null); }}
-              style={[styles.filtreCip, uzmanlik === (u === 'Tümü' ? '' : u) && styles.filtreCipSecili]}
+              style={[styles.cip, { borderColor: c.border, backgroundColor: uzmanlik === (u === 'Tümü' ? '' : u) ? '#0ea5e9' : c.card }]}
             >
-              <Text style={[styles.filtreCipYazi, uzmanlik === (u === 'Tümü' ? '' : u) && styles.filtreCipYaziSecili]}>
+              <Text style={[styles.cipYazi, { color: uzmanlik === (u === 'Tümü' ? '' : u) ? '#fff' : c.textMuted }]}>
                 {u}
               </Text>
             </TouchableOpacity>
@@ -80,58 +96,78 @@ export default function RandevuAlEkrani() {
       </ScrollView>
 
       {/* Doktor seçimi */}
-      <Text style={styles.etiket}>Doktor Seç</Text>
+      <Text style={[styles.etiket, { color: c.textMuted }]}>Doktor Seç</Text>
       <View style={styles.doktorGrid}>
-        {filtreliDoktorlar.map(d => (
-          <TouchableOpacity
-            key={d.DoktorID}
-            onPress={() => setSeciliDoktor(d)}
-            style={[styles.doktorKart, seciliDoktor?.DoktorID === d.DoktorID && styles.doktorKartSecili]}
-          >
-            <Text style={styles.doktorEmoji}>👨‍⚕️</Text>
-            <Text style={[styles.doktorAd, seciliDoktor?.DoktorID === d.DoktorID && styles.seciliMetin]}>
-              Dr. {d.Ad}
-            </Text>
-            <Text style={[styles.uzmanlik, seciliDoktor?.DoktorID === d.DoktorID && styles.seciliMetin]}>
-              {d.UzmanlikAdi}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {filtreliDoktorlar.map(d => {
+          const secili = seciliDoktor?.DoktorID === d.DoktorID;
+          return (
+            <TouchableOpacity
+              key={d.DoktorID}
+              onPress={() => setSeciliDoktor(d)}
+              style={[styles.doktorKart, { backgroundColor: c.card, borderColor: secili ? '#0ea5e9' : 'transparent' }]}
+            >
+              <Text style={styles.doktorEmoji}>👨‍⚕️</Text>
+              <Text style={[styles.doktorAd, { color: secili ? '#0ea5e9' : c.text }]}>Dr. {d.Ad}</Text>
+              <Text style={[styles.uzmanlik, { color: c.textMuted }]}>{d.UzmanlikAdi}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Tarih */}
-      <Text style={styles.etiket}>Tarih (YYYY-AA-GG)</Text>
+      <Text style={[styles.etiket, { color: c.textMuted }]}>Tarih (YYYY-AA-GG)</Text>
       <TextInput
-        style={styles.girdi}
+        style={[styles.girdi, { backgroundColor: c.card, borderColor: c.border, color: c.text }]}
         value={tarih}
         onChangeText={setTarih}
         placeholder={bugundenItibaren(1)}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={c.textFaint}
         keyboardType="numeric"
       />
 
       {/* Saat */}
-      <Text style={styles.etiket}>Saat</Text>
-      <View style={styles.saatGrid}>
-        {SAATLER.map(s => (
-          <TouchableOpacity
-            key={s}
-            onPress={() => setSaat(s)}
-            style={[styles.saatButon, saat === s && styles.saatButonSecili]}
-          >
-            <Text style={[styles.saatYazi, saat === s && styles.saatYaziSecili]}>{s}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <Text style={[styles.etiket, { color: c.textMuted }]}>
+        Saat {saatYukleniyor && <ActivityIndicator size="small" color="#0ea5e9" />}
+      </Text>
+      {!seciliDoktor || !tarih ? (
+        <Text style={[styles.saatIpucu, { color: c.textFaint }]}>Önce doktor ve tarih seçin.</Text>
+      ) : (
+        <View style={styles.saatGrid}>
+          {TUM_SAATLER.map(s => {
+            const dolu = doluSaatler.some(ds => String(ds).substring(0, 5) === s);
+            const secili = saat === s;
+            return (
+              <TouchableOpacity
+                key={s}
+                onPress={() => !dolu && setSaat(s)}
+                disabled={dolu}
+                style={[
+                  styles.saatButon,
+                  {
+                    backgroundColor: dolu ? (c.surface) : secili ? '#0ea5e9' : c.card,
+                    borderColor: dolu ? c.border : secili ? '#0ea5e9' : c.border,
+                    opacity: dolu ? 0.5 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.saatYazi, { color: dolu ? c.textFaint : secili ? '#fff' : c.text }]}>
+                  {s}
+                </Text>
+                {dolu && <Text style={[styles.doluYazi, { color: c.textFaint }]}>Dolu</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       {/* Not */}
-      <Text style={styles.etiket}>Not (opsiyonel)</Text>
+      <Text style={[styles.etiket, { color: c.textMuted, marginTop: 4 }]}>Not (opsiyonel)</Text>
       <TextInput
-        style={[styles.girdi, { height: 80, textAlignVertical: 'top' }]}
+        style={[styles.girdi, { backgroundColor: c.card, borderColor: c.border, color: c.text, height: 80, textAlignVertical: 'top' }]}
         value={notlar}
         onChangeText={setNotlar}
         placeholder="Şikayetinizi yazın..."
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={c.textFaint}
         multiline
       />
 
@@ -149,45 +185,38 @@ export default function RandevuAlEkrani() {
         onPress={randevuAl}
         disabled={gonderiyor}
       >
-        {gonderiyor
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.butonYazi}>Randevu Al</Text>}
+        {gonderiyor ? <ActivityIndicator color="#fff" /> : <Text style={styles.butonYazi}>Randevu Al</Text>}
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  kapsayici: { flex: 1, backgroundColor: '#f0f9ff' },
+  kapsayici: { flex: 1 },
   orta: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  etiket: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 },
-  filtreCip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
-  filtreCipSecili: { backgroundColor: '#0ea5e9', borderColor: '#0ea5e9' },
-  filtreCipYazi: { fontSize: 13, color: '#6b7280' },
-  filtreCipYaziSecili: { color: '#fff', fontWeight: '600' },
+  etiket: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  cip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  cipYazi: { fontSize: 13, fontWeight: '500' },
   doktorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   doktorKart: {
-    width: '47%', backgroundColor: '#fff', borderRadius: 12, padding: 14,
-    alignItems: 'center', borderWidth: 2, borderColor: 'transparent',
+    width: '47%', borderRadius: 12, padding: 14,
+    alignItems: 'center', borderWidth: 2,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
   },
-  doktorKartSecili: { borderColor: '#0ea5e9', backgroundColor: '#f0f9ff' },
   doktorEmoji: { fontSize: 28, marginBottom: 6 },
-  doktorAd: { fontSize: 13, fontWeight: '700', color: '#111827', textAlign: 'center' },
-  uzmanlik: { fontSize: 11, color: '#6b7280', textAlign: 'center', marginTop: 2 },
-  seciliMetin: { color: '#0ea5e9' },
+  doktorAd: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  uzmanlik: { fontSize: 11, textAlign: 'center', marginTop: 2 },
   girdi: {
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb',
-    borderRadius: 10, padding: 13, fontSize: 14, color: '#111827', marginBottom: 18,
+    borderWidth: 1, borderRadius: 10, padding: 13, fontSize: 14, marginBottom: 18,
   },
   saatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   saatButon: {
-    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
+    borderWidth: 1, alignItems: 'center',
   },
-  saatButonSecili: { backgroundColor: '#0ea5e9', borderColor: '#0ea5e9' },
-  saatYazi: { fontSize: 13, color: '#374151' },
-  saatYaziSecili: { color: '#fff', fontWeight: '600' },
+  saatYazi: { fontSize: 13, fontWeight: '600' },
+  doluYazi: { fontSize: 9, marginTop: 1 },
+  saatIpucu: { fontSize: 13, marginBottom: 20, fontStyle: 'italic' },
   ozet: { backgroundColor: '#eff6ff', borderRadius: 12, padding: 14, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#0ea5e9' },
   ozetBaslik: { fontWeight: '700', color: '#1e40af', marginBottom: 6, fontSize: 13 },
   ozetSatir: { fontSize: 13, color: '#1e40af', marginBottom: 3 },
