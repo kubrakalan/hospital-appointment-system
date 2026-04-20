@@ -35,6 +35,15 @@ export default function HastaPaneli() {
   const [formHata, setFormHata] = useState('')
   const [formBasari, setFormBasari] = useState('')
   const [gonderiyor, setGonderiyor] = useState(false)
+  const [doluSaatler, setDoluSaatler] = useState<string[]>([])
+
+  // Şifre değiştirme
+  const [eskiSifre, setEskiSifre] = useState('')
+  const [yeniSifre, setYeniSifre] = useState('')
+  const [yeniSifreTekrar, setYeniSifreTekrar] = useState('')
+  const [sifreHata, setSifreHata] = useState('')
+  const [sifreBasari, setSifreBasari] = useState('')
+  const [sifreGonderiyor, setSifreGonderiyor] = useState(false)
 
   const [aktifSekme, setAktifSekme] = useState<'randevular' | 'gecmis' | 'odemeler'>('randevular')
 
@@ -110,6 +119,17 @@ export default function HastaPaneli() {
     ).then(setGecmisKayitlar).finally(() => setGecmisYukleniyor(false))
   }, [aktifSekme, randevular, gecmisKayitlar.length])
 
+  // Doktor ve tarih her ikisi de seçilince dolu saatleri çek
+  useEffect(() => {
+    if (!doktorId || !tarih) {
+      setDoluSaatler([])
+      return
+    }
+    api.doluSaatler(parseInt(doktorId), tarih)
+      .then(setDoluSaatler)
+      .catch(() => setDoluSaatler([]))
+  }, [doktorId, tarih])
+
   async function tibbiBilgiAc(randevu: Randevu) {
     setTibbiBilgiModal({ randevu })
     setTibbiBilgi(null)
@@ -139,6 +159,26 @@ export default function HastaPaneli() {
       setFormHata(err instanceof Error ? err.message : 'Randevu alınamadı')
     } finally {
       setGonderiyor(false)
+    }
+  }
+
+  async function handleSifreDegistir(e: React.FormEvent) {
+    e.preventDefault()
+    setSifreHata('')
+    setSifreBasari('')
+    if (yeniSifre !== yeniSifreTekrar) {
+      setSifreHata('Yeni şifreler eşleşmiyor')
+      return
+    }
+    setSifreGonderiyor(true)
+    try {
+      await api.sifreDegistir(eskiSifre, yeniSifre)
+      setSifreBasari('Şifreniz başarıyla güncellendi')
+      setEskiSifre(''); setYeniSifre(''); setYeniSifreTekrar('')
+    } catch (err: unknown) {
+      setSifreHata(err instanceof Error ? err.message : 'Şifre değiştirilemedi')
+    } finally {
+      setSifreGonderiyor(false)
     }
   }
 
@@ -260,7 +300,14 @@ export default function HastaPaneli() {
 
               <select value={saat} onChange={e => setSaat(e.target.value)} disabled={!tarih || !doktorId} className={`${inputCls} disabled:opacity-50`}>
                 <option value="">Saat Seçiniz</option>
-                {tumSaatler.map(s => <option key={s} value={s}>{s}</option>)}
+                {tumSaatler.map(s => {
+                  const dolu = doluSaatler.includes(s)
+                  return (
+                    <option key={s} value={s} disabled={dolu}>
+                      {s}{dolu ? ' — Dolu' : ''}
+                    </option>
+                  )
+                })}
               </select>
 
               <textarea
@@ -339,7 +386,6 @@ export default function HastaPaneli() {
             ) : (
               gecmisKayitlar.map(({ randevu, kayit }) => (
                 <div key={randevu.RandevuID} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
-                  {/* Randevu başlığı */}
                   <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">👨‍⚕️</span>
@@ -353,8 +399,6 @@ export default function HastaPaneli() {
                       <p className="text-xs text-gray-400">{String(randevu.RandevuSaati).substring(0, 5)}</p>
                     </div>
                   </div>
-
-                  {/* Tıbbi kayıt içeriği */}
                   {!kayit ? (
                     <p className="text-gray-400 text-sm italic">Bu randevu için tıbbi kayıt girilmemiş.</p>
                   ) : (
@@ -376,6 +420,28 @@ export default function HastaPaneli() {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {/* ŞİFRE DEĞİŞTİRME — randevular sekmesinde gösterilir */}
+        {aktifSekme === 'randevular' && (
+          <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 max-w-sm">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">🔒 Şifre Değiştir</h2>
+            {sifreHata && (
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg px-3 py-2 text-sm mb-3">{sifreHata}</div>
+            )}
+            {sifreBasari && (
+              <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-600 dark:text-green-400 rounded-lg px-3 py-2 text-sm mb-3">{sifreBasari}</div>
+            )}
+            <form className="flex flex-col gap-3" onSubmit={handleSifreDegistir}>
+              <input type="password" placeholder="Mevcut şifre" value={eskiSifre} onChange={e => setEskiSifre(e.target.value)} className={inputCls} />
+              <input type="password" placeholder="Yeni şifre (en az 6 karakter)" value={yeniSifre} onChange={e => setYeniSifre(e.target.value)} className={inputCls} />
+              <input type="password" placeholder="Yeni şifre tekrar" value={yeniSifreTekrar} onChange={e => setYeniSifreTekrar(e.target.value)} className={inputCls} />
+              <button type="submit" disabled={!eskiSifre || !yeniSifre || !yeniSifreTekrar || sifreGonderiyor}
+                className="bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition">
+                {sifreGonderiyor ? 'Güncelleniyor...' : 'Şifreyi Güncelle'}
+              </button>
+            </form>
           </div>
         )}
       </div>

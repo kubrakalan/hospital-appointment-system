@@ -132,6 +132,91 @@ router.patch('/randevular/:id/durum', async (req, res) => {
 });
 
 // ============================================================
+// GET /api/doktor/calisma-saatleri — doktorun mevcut çalışma saatleri
+// ============================================================
+router.get('/calisma-saatleri', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT dc.CalismaID, dc.Gun, dc.BaslangicSaat, dc.BitisSaat
+        FROM DoktorCalisma dc
+        JOIN Doktorlar d ON dc.DoktorID = d.DoktorID
+        WHERE d.KullaniciID = @kullaniciId
+        ORDER BY
+          CASE dc.Gun
+            WHEN 'Pazartesi' THEN 1 WHEN 'Salı' THEN 2 WHEN 'Çarşamba' THEN 3
+            WHEN 'Perşembe' THEN 4 WHEN 'Cuma' THEN 5 WHEN 'Cumartesi' THEN 6
+            WHEN 'Pazar' THEN 7 ELSE 8 END
+      `);
+    res.json(sonuc.recordset);
+  } catch (err) {
+    logger.error(`Çalışma saatleri getirme hatası | kullaniciId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// PUT /api/doktor/calisma-saatleri — çalışma saatlerini tamamen güncelle
+// ============================================================
+router.put('/calisma-saatleri', async (req, res) => {
+  const { saatler } = req.body; // [{ gun, baslangicSaat, bitisSaat }]
+
+  if (!Array.isArray(saatler)) {
+    return res.status(400).json({ hata: 'Geçersiz veri formatı' });
+  }
+
+  const gecerliGunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+  for (const s of saatler) {
+    if (!gecerliGunler.includes(s.gun)) {
+      return res.status(400).json({ hata: `Geçersiz gün: ${s.gun}` });
+    }
+    if (!/^\d{2}:\d{2}$/.test(s.baslangicSaat) || !/^\d{2}:\d{2}$/.test(s.bitisSaat)) {
+      return res.status(400).json({ hata: 'Geçersiz saat formatı (HH:MM bekleniyor)' });
+    }
+    if (s.baslangicSaat >= s.bitisSaat) {
+      return res.status(400).json({ hata: `${s.gun}: Başlangıç saati bitiş saatinden önce olmalı` });
+    }
+  }
+
+  try {
+    const pool = await getPool();
+
+    // DoktorID'yi al
+    const doktorSonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query('SELECT DoktorID FROM Doktorlar WHERE KullaniciID = @kullaniciId');
+
+    if (doktorSonuc.recordset.length === 0) {
+      return res.status(404).json({ hata: 'Doktor profili bulunamadı' });
+    }
+
+    const doktorId = doktorSonuc.recordset[0].DoktorID;
+
+    // Önce mevcut kayıtları sil, sonra yenileri ekle
+    await pool.request()
+      .input('doktorId', sql.Int, doktorId)
+      .query('DELETE FROM DoktorCalisma WHERE DoktorID = @doktorId');
+
+    for (const s of saatler) {
+      await pool.request()
+        .input('doktorId', sql.Int, doktorId)
+        .input('gun', sql.NVarChar, s.gun)
+        .input('baslangic', sql.NVarChar, s.baslangicSaat + ':00')
+        .input('bitis', sql.NVarChar, s.bitisSaat + ':00')
+        .query('INSERT INTO DoktorCalisma (DoktorID, Gun, BaslangicSaat, BitisSaat) VALUES (@doktorId, @gun, @baslangic, @bitis)');
+    }
+
+    logger.info(`Çalışma saatleri güncellendi | doktorId=${doktorId} kullaniciId=${req.kullanici.kullaniciId} ip=${req.ip}`);
+    res.json({ mesaj: 'Çalışma saatleri güncellendi' });
+  } catch (err) {
+    logger.error(`Çalışma saatleri güncelleme hatası | kullaniciId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
 // POST /api/doktor/randevular/:id/tibbi-kayit
 // Doktor tıbbi kayıt oluşturur veya günceller (upsert)
 // ============================================================

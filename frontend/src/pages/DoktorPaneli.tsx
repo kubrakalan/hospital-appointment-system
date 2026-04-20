@@ -54,7 +54,7 @@ const textareaCls = `${inputCls} resize-none`
 export default function DoktorPaneli() {
   const [randevular, setRandevular] = useState<Randevu[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [aktifSekme, setAktifSekme] = useState<'liste' | 'takvim' | 'istatistik'>('liste')
+  const [aktifSekme, setAktifSekme] = useState<'liste' | 'takvim' | 'istatistik' | 'calisma'>('liste')
   const [haftaBaslangic, setHaftaBaslangic] = useState(() => haftaBaslangici(new Date()))
 
   // İstatistik
@@ -62,6 +62,20 @@ export default function DoktorPaneli() {
   const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(false)
 
   // Tıbbi kayıt modal
+  const [durumHata, setDurumHata] = useState('')
+  const [listeDurum, setListeDurum] = useState('Tümü')
+  const [listeTarihBas, setListeTarihBas] = useState('')
+  const [listeTarihBit, setListeTarihBit] = useState('')
+  // Çalışma saatleri
+  const GUNLER = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
+  const [calismaSaatleri, setCalismaSaatleri] = useState<{ gun: string; baslangicSaat: string; bitisSaat: string; aktif: boolean }[]>(
+    GUNLER.map(gun => ({ gun, baslangicSaat: '09:00', bitisSaat: '17:00', aktif: false }))
+  )
+  const [calismaYukleniyor, setCalismaYukleniyor] = useState(false)
+  const [calismaKaydediyor, setCalismaKaydediyor] = useState(false)
+  const [calismaBasari, setCalismaBasari] = useState('')
+  const [calismaHata, setCalismaHata] = useState('')
+
   const [modalRandevuId, setModalRandevuId] = useState<number | null>(null)
   const [modalHastaAdi, setModalHastaAdi] = useState('')
   const [form, setForm] = useState<TibbiBilgiForm>(bosForm)
@@ -72,6 +86,22 @@ export default function DoktorPaneli() {
 
   useEffect(() => {
     api.doktorRandevular().then(setRandevular).catch(() => {}).finally(() => setYukleniyor(false))
+
+    // Mevcut çalışma saatlerini yükle
+    setCalismaYukleniyor(true)
+    api.doktorCalismaSaatleri().then((kayitlar: { Gun: string; BaslangicSaat: string; BitisSaat: string }[]) => {
+      if (kayitlar.length > 0) {
+        setCalismaSaatleri(GUNLER.map(gun => {
+          const kayit = kayitlar.find(k => k.Gun === gun)
+          return {
+            gun,
+            baslangicSaat: kayit ? String(kayit.BaslangicSaat).substring(0, 5) : '09:00',
+            bitisSaat:     kayit ? String(kayit.BitisSaat).substring(0, 5)     : '17:00',
+            aktif: !!kayit,
+          }
+        }))
+      }
+    }).catch(() => {}).finally(() => setCalismaYukleniyor(false))
   }, [])
 
   useEffect(() => {
@@ -147,6 +177,14 @@ export default function DoktorPaneli() {
   }
   function buHafta() { setHaftaBaslangic(haftaBaslangici(new Date())) }
 
+  const filtreliRandevular = randevular.filter(r => {
+    const durumUygun = listeDurum === 'Tümü' || r.Durum === listeDurum
+    const tarih = r.RandevuTarihi.split('T')[0]
+    const basUygun = !listeTarihBas || tarih >= listeTarihBas
+    const bitUygun = !listeTarihBit || tarih <= listeTarihBit
+    return durumUygun && basUygun && bitUygun
+  })
+
   const bugun = tarihStr(new Date())
   const bugunRandevu = randevular.filter(r => r.RandevuTarihi.split('T')[0] === bugun).length
   const bekleyen     = randevular.filter(r => r.Durum === 'Beklemede').length
@@ -184,6 +222,7 @@ export default function DoktorPaneli() {
             { key: 'liste',      label: '📋 Liste' },
             { key: 'takvim',     label: '📆 Takvim' },
             { key: 'istatistik', label: '📊 İstatistiklerim' },
+            { key: 'calisma',    label: '🕐 Çalışma Saatleri' },
           ] as const).map(s => (
             <button key={s.key} onClick={() => setAktifSekme(s.key)}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition ${aktifSekme === s.key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
@@ -195,8 +234,32 @@ export default function DoktorPaneli() {
         {/* LİSTE GÖRÜNÜMÜ */}
         {aktifSekme === 'liste' && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+
+            {/* Filtreler */}
+            <div className="flex flex-col gap-3 mb-5">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <select value={listeDurum} onChange={e => setListeDurum(e.target.value)}
+                  className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  {['Tümü','Beklemede','Onaylandı','Tamamlandı','İptal','Gelmedi'].map(d => <option key={d}>{d}</option>)}
+                </select>
+                <div className="flex items-center gap-2 flex-1">
+                  <input type="date" value={listeTarihBas} onChange={e => setListeTarihBas(e.target.value)}
+                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
+                  <span className="text-xs text-gray-400">—</span>
+                  <input type="date" value={listeTarihBit} onChange={e => setListeTarihBit(e.target.value)}
+                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
+                </div>
+                {(listeDurum !== 'Tümü' || listeTarihBas || listeTarihBit) && (
+                  <button onClick={() => { setListeDurum('Tümü'); setListeTarihBas(''); setListeTarihBit('') }}
+                    className="text-xs text-gray-400 hover:text-red-500 transition shrink-0">
+                    Temizle ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
             {yukleniyor ? <p className="text-gray-400 text-sm">Yükleniyor...</p>
-            : randevular.length === 0 ? <p className="text-gray-400 text-sm">Henüz randevunuz yok.</p>
+            : filtreliRandevular.length === 0 ? <p className="text-gray-400 text-sm">{randevular.length === 0 ? 'Henüz randevunuz yok.' : 'Filtreyle eşleşen randevu bulunamadı.'}</p>
             : (
               <>
                 {/* Masaüstü tablo */}
@@ -210,7 +273,7 @@ export default function DoktorPaneli() {
                       </tr>
                     </thead>
                     <tbody>
-                      {randevular.map((r) => (
+                      {filtreliRandevular.map((r) => (
                         <tr key={r.RandevuID} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                           <td className="py-4"><div className="flex items-center gap-3"><span>👤</span><span className="font-medium text-gray-800 dark:text-gray-100 text-sm">{r.HastaAdi}</span></div></td>
                           <td className="py-4 text-gray-600 dark:text-gray-300 text-sm">{r.RandevuTarihi.split('T')[0]}</td>
@@ -241,7 +304,7 @@ export default function DoktorPaneli() {
 
                 {/* Mobil kartlar */}
                 <div className="md:hidden flex flex-col gap-3">
-                  {randevular.map((r) => (
+                  {filtreliRandevular.map((r) => (
                     <div key={r.RandevuID} className="p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2"><span>👤</span><span className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{r.HastaAdi}</span></div>
@@ -406,6 +469,70 @@ export default function DoktorPaneli() {
           </div>
         )}
       </div>
+
+      {/* ÇALIŞMA SAATLERİ */}
+        {aktifSekme === 'calisma' && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Çalışma Saatleri</h2>
+            <p className="text-gray-400 text-sm mb-6">Hangi günler ve saatler arasında randevu alınabileceğini ayarlayın.</p>
+
+            {calismaYukleniyor ? <p className="text-gray-400 text-sm">Yükleniyor...</p> : (
+              <div className="flex flex-col gap-3">
+                {calismaSaatleri.map((s, i) => (
+                  <div key={s.gun} className={`flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl border transition ${s.aktif ? 'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/10' : 'border-gray-100 dark:border-gray-700 opacity-60'}`}>
+                    <div className="flex items-center gap-3 min-w-[120px]">
+                      <input
+                        type="checkbox"
+                        checked={s.aktif}
+                        onChange={e => setCalismaSaatleri(prev => prev.map((x, j) => j === i ? { ...x, aktif: e.target.checked } : x))}
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                      <span className="font-medium text-gray-700 dark:text-gray-200 text-sm w-20">{s.gun}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="time"
+                        value={s.baslangicSaat}
+                        disabled={!s.aktif}
+                        onChange={e => setCalismaSaatleri(prev => prev.map((x, j) => j === i ? { ...x, baslangicSaat: e.target.value } : x))}
+                        className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+                      />
+                      <span className="text-gray-400 text-sm">—</span>
+                      <input
+                        type="time"
+                        value={s.bitisSaat}
+                        disabled={!s.aktif}
+                        onChange={e => setCalismaSaatleri(prev => prev.map((x, j) => j === i ? { ...x, bitisSaat: e.target.value } : x))}
+                        className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {calismaBasari && <p className="text-green-600 dark:text-green-400 text-sm bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2">{calismaBasari}</p>}
+                {calismaHata   && <p className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{calismaHata}</p>}
+
+                <button
+                  onClick={async () => {
+                    setCalismaKaydediyor(true); setCalismaBasari(''); setCalismaHata('')
+                    try {
+                      const aktifler = calismaSaatleri.filter(s => s.aktif)
+                      await api.doktorCalismaSaatleriGuncelle(aktifler.map(s => ({ gun: s.gun, baslangicSaat: s.baslangicSaat, bitisSaat: s.bitisSaat })))
+                      setCalismaBasari('Çalışma saatleri kaydedildi.')
+                    } catch (err: unknown) {
+                      setCalismaHata(err instanceof Error ? err.message : 'Kayıt başarısız')
+                    }
+                    setCalismaKaydediyor(false)
+                  }}
+                  disabled={calismaKaydediyor}
+                  className="bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-medium text-sm mt-2 disabled:opacity-50 transition"
+                >
+                  {calismaKaydediyor ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
       {/* TIBBİ KAYIT MODAL */}
       {modalRandevuId !== null && (

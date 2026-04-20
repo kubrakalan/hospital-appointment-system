@@ -33,3 +33,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Sunucu http://localhost:${PORT} adresinde çalışıyor`);
 });
+
+// Email hatırlatma scheduler'ı başlat — her gün 08:00'de yarın randevusu olanlara email atar
+const { schedulerBaslat } = require('./emailHatirlatma');
+schedulerBaslat();
