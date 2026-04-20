@@ -117,9 +117,14 @@ export const api = {
   tibbiBilgiHasta: (randevuId: number) =>
     istek(`/randevular/${randevuId}/tibbi-kayit`),
 
+  hastaOdemelerim: () =>
+    istek('/randevular/odemelerim'),
+
   // Doktor
   doktorRandevular: () =>
     istek('/doktor/randevular'),
+  doktorIstatistikler: () =>
+    istek('/doktor/istatistikler'),
   doktorRandevuDurum: (id: number, durum: string) =>
     istek(`/doktor/randevular/${id}/durum`, { method: 'PATCH', body: JSON.stringify({ durum }) }),
   doktorTibbiBilgiGetir: (randevuId: number) =>
@@ -163,4 +168,26 @@ export const api = {
     istek('/admin/istatistikler/saat', {}, true),
   adminIptalListesi: () =>
     istek('/admin/istatistikler/iptal', {}, true),
+  adminVerimlilik: () =>
+    istek('/admin/istatistikler/verimlilik', {}, true),
+
+  // Toplu bildirim
+  adminTopluBildirim: (baslik: string, mesaj: string) =>
+    istek('/admin/bildirim/toplu', { method: 'POST', body: JSON.stringify({ baslik, mesaj }) }, true),
+
+  // Yönetici yönetimi
+  adminYoneticiEkle: (data: { ad: string; soyad: string; email: string; sifre: string }) =>
+    istek('/admin/yoneticiler', { method: 'POST', body: JSON.stringify(data) }, true),
+  adminYoneticiSil: (id: number) =>
+    istek(`/admin/yoneticiler/${id}`, { method: 'DELETE' }, true),
+
+  // Ödeme / Fatura
+  adminOdemeler: () =>
+    istek('/admin/odemeler', {}, true),
+  adminOdemeEkle: (data: { randevuId: number; tutar: number; odemeYontemi?: string; notlar?: string }) =>
+    istek('/admin/odemeler', { method: 'POST', body: JSON.stringify(data) }, true),
+  adminOdemeDurumGuncelle: (id: number, durum: string) =>
+    istek(`/admin/odemeler/${id}/durum`, { method: 'PATCH', body: JSON.stringify({ durum }) }, true),
+  adminOdemeOzet: () =>
+    istek('/admin/odemeler/ozet', {}, true),
 };

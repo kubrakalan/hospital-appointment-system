@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 import Navbar from '../components/Navbar'
 import DurumBadge from '../components/DurumBadge'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 const durumRenk: Record<string, string> = {
   'Onaylandı': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
@@ -13,6 +14,16 @@ const durumRenk: Record<string, string> = {
 interface Randevu {
   RandevuID: number; HastaAdi: string; RandevuTarihi: string
   RandevuSaati: string; Durum: string; Notlar: string | null
+}
+
+interface DoktorIstatistik {
+  ozet: {
+    toplamRandevu: number; tamamlanan: number; iptalEdilen: number
+    gelmedi: number; bekleyen: number; onaylandi: number
+    bugun: number; son30Gun: number; benzersizHasta: number
+  }
+  aylik: { ay: string; sayi: number; tamamlanan: number }[]
+  topHastalar: { hastaAdi: string; randevuSayisi: number }[]
 }
 
 interface TibbiBilgiForm {
@@ -43,11 +54,14 @@ const textareaCls = `${inputCls} resize-none`
 export default function DoktorPaneli() {
   const [randevular, setRandevular] = useState<Randevu[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [aktifSekme, setAktifSekme] = useState<'liste' | 'takvim'>('liste')
+  const [aktifSekme, setAktifSekme] = useState<'liste' | 'takvim' | 'istatistik'>('liste')
   const [haftaBaslangic, setHaftaBaslangic] = useState(() => haftaBaslangici(new Date()))
 
+  // İstatistik
+  const [istatistik, setIstatistik] = useState<DoktorIstatistik | null>(null)
+  const [istatistikYukleniyor, setIstatistikYukleniyor] = useState(false)
+
   // Tıbbi kayıt modal
-  const [durumHata, setDurumHata] = useState('')
   const [modalRandevuId, setModalRandevuId] = useState<number | null>(null)
   const [modalHastaAdi, setModalHastaAdi] = useState('')
   const [form, setForm] = useState<TibbiBilgiForm>(bosForm)
@@ -60,14 +74,18 @@ export default function DoktorPaneli() {
     api.doktorRandevular().then(setRandevular).catch(() => {}).finally(() => setYukleniyor(false))
   }, [])
 
+  useEffect(() => {
+    if (aktifSekme === 'istatistik' && !istatistik) {
+      setIstatistikYukleniyor(true)
+      api.doktorIstatistikler().then(setIstatistik).catch(() => {}).finally(() => setIstatistikYukleniyor(false))
+    }
+  }, [aktifSekme, istatistik])
+
   async function durumGuncelle(id: number, durum: string) {
-    setDurumHata('')
     try {
       await api.doktorRandevuDurum(id, durum)
       setRandevular(prev => prev.map(r => r.RandevuID === id ? { ...r, Durum: durum } : r))
-    } catch (err: unknown) {
-      setDurumHata(err instanceof Error ? err.message : 'İşlem başarısız')
-    }
+    } catch { }
   }
 
   async function tibbiBilgiAc(randevu: Randevu) {
@@ -161,11 +179,15 @@ export default function DoktorPaneli() {
         </div>
 
         {/* Sekme butonları */}
-        <div className="flex gap-2 mb-6">
-          {(['liste', 'takvim'] as const).map(s => (
-            <button key={s} onClick={() => setAktifSekme(s)}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition ${aktifSekme === s ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-              {s === 'liste' ? '📋 Liste' : '📆 Haftalık Takvim'}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {([
+            { key: 'liste',      label: '📋 Liste' },
+            { key: 'takvim',     label: '📆 Takvim' },
+            { key: 'istatistik', label: '📊 İstatistiklerim' },
+          ] as const).map(s => (
+            <button key={s.key} onClick={() => setAktifSekme(s.key)}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition ${aktifSekme === s.key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+              {s.label}
             </button>
           ))}
         </div>
@@ -293,6 +315,94 @@ export default function DoktorPaneli() {
                 return t >= tarihStr(haftaGunleri[0]) && t <= tarihStr(haftaGunleri[6])
               }).length} randevu
             </p>
+          </div>
+        )}
+
+        {/* İSTATİSTİK GÖRÜNÜMÜ */}
+        {aktifSekme === 'istatistik' && (
+          <div className="space-y-6">
+            {istatistikYukleniyor ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center text-gray-400 text-sm">Yükleniyor...</div>
+            ) : !istatistik ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center text-gray-400 text-sm">İstatistik verisi bulunamadı.</div>
+            ) : (
+              <>
+                {/* Özet kartlar */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { icon: '👥', sayi: istatistik.ozet.benzersizHasta,  etiket: 'Toplam Hasta' },
+                    { icon: '✅', sayi: istatistik.ozet.tamamlanan,       etiket: 'Tamamlanan' },
+                    { icon: '❌', sayi: istatistik.ozet.iptalEdilen,      etiket: 'İptal Edilen' },
+                    { icon: '🚫', sayi: istatistik.ozet.gelmedi,          etiket: 'Gelmedi' },
+                  ].map(k => (
+                    <div key={k.etiket} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm flex items-center gap-3">
+                      <span className="text-2xl">{k.icon}</span>
+                      <div>
+                        <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{k.sayi}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">{k.etiket}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tamamlanma oranı */}
+                {istatistik.ozet.toplamRandevu > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Tamamlanma Oranı</p>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                        <div
+                          className="bg-green-500 h-4 rounded-full transition-all"
+                          style={{ width: `${Math.round(100 * istatistik.ozet.tamamlanan / istatistik.ozet.toplamRandevu)}%` }}
+                        />
+                      </div>
+                      <span className="text-lg font-bold text-green-600 dark:text-green-400 min-w-[4rem] text-right">
+                        %{Math.round(100 * istatistik.ozet.tamamlanan / istatistik.ozet.toplamRandevu)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Toplam {istatistik.ozet.toplamRandevu} randevu üzerinden</p>
+                  </div>
+                )}
+
+                {/* Aylık grafik */}
+                {istatistik.aylik.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">Son 6 Ay — Randevu Grafiği</p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={istatistik.aylik}>
+                        <XAxis dataKey="ay" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="sayi" name="Toplam" fill="#93c5fd" radius={[4,4,0,0]} />
+                        <Bar dataKey="tamamlanan" name="Tamamlanan" fill="#34d399" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* En sık gelen hastalar */}
+                {istatistik.topHastalar.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">En Sık Gelen Hastalar (Top 5)</p>
+                    <div className="flex flex-col gap-2">
+                      {istatistik.topHastalar.map((h, i) => (
+                        <div key={h.hastaAdi} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-gray-400 w-5 text-right">{i + 1}.</span>
+                          <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-7 overflow-hidden relative">
+                            <div
+                              className="bg-blue-400 dark:bg-blue-600 h-7 rounded-full"
+                              style={{ width: `${(h.randevuSayisi / istatistik.topHastalar[0].randevuSayisi) * 100}%` }}
+                            />
+                            <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-gray-700 dark:text-gray-100">{h.hastaAdi}</span>
+                          </div>
+                          <span className="text-sm font-bold text-gray-600 dark:text-gray-300 min-w-[2rem] text-right">{h.randevuSayisi}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

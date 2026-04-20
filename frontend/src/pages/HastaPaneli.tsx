@@ -36,10 +36,20 @@ export default function HastaPaneli() {
   const [formBasari, setFormBasari] = useState('')
   const [gonderiyor, setGonderiyor] = useState(false)
 
+  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'gecmis' | 'odemeler'>('randevular')
+
+  // Ödemeler
+  const [odemeler, setOdemeler] = useState<{ OdemeID: number; Tutar: number; Durum: string; OdemeYontemi: string; Notlar: string | null; OdemeTarihi: string | null; RandevuTarihi: string; RandevuSaati: string; DoktorAdi: string; UzmanlikAdi: string }[]>([])
+  const [odemeYukleniyor, setOdemeYukleniyor] = useState(false)
+
   // Tıbbi kayıt modal
   const [tibbiBilgiModal, setTibbiBilgiModal] = useState<{ randevu: Randevu } | null>(null)
   const [tibbiBilgi, setTibbiBilgi] = useState<TibbiBilgi | null>(null)
   const [tibbiBilgiYukleniyor, setTibbiBilgiYukleniyor] = useState(false)
+
+  // Tıbbi geçmiş: tamamlanan randevuların tıbbi kayıtları
+  const [gecmisKayitlar, setGecmisKayitlar] = useState<{ randevu: Randevu; kayit: TibbiBilgi | null }[]>([])
+  const [gecmisYukleniyor, setGecmisYukleniyor] = useState(false)
 
   // Sonraki kontrol uyarısı (7 gün içindeki kontroller)
   const [kontrolUyarilari, setKontrolUyarilari] = useState<{ randevuId: number; doktorAdi: string; tarih: string }[]>([])
@@ -80,6 +90,25 @@ export default function HastaPaneli() {
     }
     yukle()
   }, [])
+
+  useEffect(() => {
+    if (aktifSekme !== 'odemeler' || odemeler.length > 0) return
+    setOdemeYukleniyor(true)
+    api.hastaOdemelerim().then(setOdemeler).catch(() => {}).finally(() => setOdemeYukleniyor(false))
+  }, [aktifSekme, odemeler.length])
+
+  useEffect(() => {
+    if (aktifSekme !== 'gecmis' || gecmisKayitlar.length > 0) return
+    const tamamlananlar = randevular.filter(r => r.Durum === 'Tamamlandı' || r.Durum === 'Gelmedi')
+    if (tamamlananlar.length === 0) return
+    setGecmisYukleniyor(true)
+    Promise.all(
+      tamamlananlar.map(async rv => {
+        try { return { randevu: rv, kayit: await api.tibbiBilgiHasta(rv.RandevuID) }
+        } catch { return { randevu: rv, kayit: null } }
+      })
+    ).then(setGecmisKayitlar).finally(() => setGecmisYukleniyor(false))
+  }, [aktifSekme, randevular, gecmisKayitlar.length])
 
   async function tibbiBilgiAc(randevu: Randevu) {
     setTibbiBilgiModal({ randevu })
@@ -179,7 +208,21 @@ export default function HastaPaneli() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Sekme butonları */}
+        <div className="flex gap-2 mb-6">
+          {([
+            { key: 'randevular', label: '📋 Randevularım' },
+            { key: 'gecmis',     label: '🗂️ Tıbbi Geçmişim' },
+            { key: 'odemeler',   label: '💳 Ödemelerim' },
+          ] as const).map(s => (
+            <button key={s.key} onClick={() => setAktifSekme(s.key)}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition ${aktifSekme === s.key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {aktifSekme === 'randevular' && <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
           {/* YENİ RANDEVU FORMU */}
           <div className="md:col-span-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6">
@@ -281,8 +324,131 @@ export default function HastaPaneli() {
             )}
           </div>
 
-        </div>
+        </div>}
+
+        {/* TIBBİ GEÇMİŞ SEKMESİ */}
+        {aktifSekme === 'gecmis' && (
+          <div className="space-y-4">
+            {gecmisYukleniyor ? (
+              <p className="text-gray-400 text-sm text-center py-10">Yükleniyor...</p>
+            ) : gecmisKayitlar.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+                <p className="text-4xl mb-3">🗂️</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Henüz tamamlanmış randevunuz bulunmuyor.</p>
+              </div>
+            ) : (
+              gecmisKayitlar.map(({ randevu, kayit }) => (
+                <div key={randevu.RandevuID} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
+                  {/* Randevu başlığı */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">👨‍⚕️</span>
+                      <div>
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {randevu.DoktorAdi}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">{randevu.UzmanlikAdi}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{tarihFormatla(randevu.RandevuTarihi.split('T')[0])}</p>
+                      <p className="text-xs text-gray-400">{String(randevu.RandevuSaati).substring(0, 5)}</p>
+                    </div>
+                  </div>
+
+                  {/* Tıbbi kayıt içeriği */}
+                  {!kayit ? (
+                    <p className="text-gray-400 text-sm italic">Bu randevu için tıbbi kayıt girilmemiş.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        { label: '🔬 Tanı',              deger: kayit.Tani },
+                        { label: '💊 Reçete',            deger: kayit.Recete },
+                        { label: '🩺 Uygulanan İşlem',   deger: kayit.UygulananIslem },
+                        { label: '🧪 Lab / Tahlil Notu', deger: kayit.LabNotu },
+                        { label: '📅 Sonraki Kontrol',   deger: kayit.SonrakiKontrol ? tarihFormatla(kayit.SonrakiKontrol.split('T')[0]) : null },
+                      ].filter(f => f.deger).map(f => (
+                        <div key={f.label} className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3">
+                          <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{f.label}</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{f.deger}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ÖDEMELER SEKMESİ */}
+      {aktifSekme === 'odemeler' && (
+        <div className="space-y-4">
+          {odemeYukleniyor ? (
+            <p className="text-gray-400 text-sm text-center py-10">Yükleniyor...</p>
+          ) : odemeler.length === 0 ? (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+              <p className="text-4xl mb-3">💳</p>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">Henüz ödeme kaydınız bulunmuyor.</p>
+            </div>
+          ) : (
+            <>
+              {/* Özet */}
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: 'Toplam Ödenen', deger: `₺${odemeler.filter(o => o.Durum === 'Ödendi').reduce((t, o) => t + o.Tutar, 0).toLocaleString('tr-TR')}`, renk: 'text-green-600' },
+                  { label: 'Bekleyen', deger: `₺${odemeler.filter(o => o.Durum === 'Bekliyor').reduce((t, o) => t + o.Tutar, 0).toLocaleString('tr-TR')}`, renk: 'text-amber-500' },
+                  { label: 'İşlem Sayısı', deger: odemeler.length, renk: 'text-blue-600' },
+                ].map(k => (
+                  <div key={k.label} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 text-center">
+                    <p className={`text-xl font-bold ${k.renk}`}>{k.deger}</p>
+                    <p className="text-gray-400 text-xs mt-1">{k.label}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Liste */}
+              {odemeler.map(o => {
+                const durumRenk = o.Durum === 'Ödendi' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : o.Durum === 'Bekliyor' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                return (
+                  <div key={o.OdemeID} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {o.DoktorAdi}</p>
+                        <p className="text-gray-400 text-xs">{o.UzmanlikAdi}</p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${durumRenk}`}>{o.Durum}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                      <div>
+                        <span className="text-gray-400 text-xs">Randevu Tarihi</span>
+                        <p className="text-gray-700 dark:text-gray-200">{tarihFormatla(o.RandevuTarihi.split('T')[0])} · {String(o.RandevuSaati).substring(0, 5)}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 text-xs">Ödeme Yöntemi</span>
+                        <p className="text-gray-700 dark:text-gray-200">{o.OdemeYontemi}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 text-xs">Tutar</span>
+                        <p className="text-gray-700 dark:text-gray-200 font-semibold">₺{o.Tutar.toLocaleString('tr-TR')}</p>
+                      </div>
+                      {o.OdemeTarihi && (
+                        <div>
+                          <span className="text-gray-400 text-xs">Ödeme Tarihi</span>
+                          <p className="text-gray-700 dark:text-gray-200">{tarihFormatla(o.OdemeTarihi.split('T')[0])}</p>
+                        </div>
+                      )}
+                    </div>
+                    {o.Notlar && (
+                      <p className="mt-3 text-xs text-gray-400 italic border-t border-gray-100 dark:border-gray-700 pt-2">{o.Notlar}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
+        </div>
+      )}
 
       {/* TIBBİ KAYIT MODAL (salt okunur) */}
       {tibbiBilgiModal && (
