@@ -2,9 +2,9 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const nodemailer = require('nodemailer');
 const { getPool, sql } = require('../db');
 const logger = require('../logger');
+const emailService = require('../emailService');
 
 // Şifre sıfırlama token'larını bellekte tut (token → { email, expiry })
 const sifirlamaTokenlari = new Map();
@@ -16,11 +16,6 @@ setInterval(() => {
     if (simdi > kayit.expiry) sifirlamaTokenlari.delete(token);
   }
 }, 60 * 60 * 1000);
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-});
 
 const router = express.Router();
 
@@ -190,6 +185,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       .query('INSERT INTO Hastalar (KullaniciID) VALUES (@kullaniciId)');
 
     logger.info(`KAYIT BAŞARILI | email=${email} ad="${ad} ${soyad}" ip=${req.ip}`);
+    emailService.hosgeldin(ad, email);
     res.status(201).json({ mesaj: 'Kayıt başarılı' });
 
   } catch (err) {
@@ -219,17 +215,7 @@ router.post('/sifremi-unuttum', sifreSifirlamaLimiter, async (req, res) => {
       sifirlamaTokenlari.set(token, { email, expiry: Date.now() + 3600000 });
 
       const link = `${process.env.FRONTEND_URL}/sifre-sifirla?token=${token}`;
-      await transporter.sendMail({
-        from: `"MediRandevu" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: 'Şifre Sıfırlama',
-        html: `
-          <p>Merhaba ${Ad},</p>
-          <p>Şifrenizi sıfırlamak için aşağıdaki bağlantıya tıklayın:</p>
-          <a href="${link}" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">Şifremi Sıfırla</a>
-          <p>Bu link 1 saat geçerlidir. Eğer bu isteği siz yapmadıysanız dikkate almayın.</p>
-        `,
-      });
+      emailService.sifreSifirla(Ad, email, link);
       logger.info(`Şifre sıfırlama emaili gönderildi: ${email}`);
     }
 

@@ -3,6 +3,7 @@ const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
 const randevuLogger = require('../randevuLogger');
 const logger = require('../logger');
+const emailService = require('../emailService');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -52,8 +53,11 @@ router.patch('/randevular/:id/durum', async (req, res) => {
         SELECT h.KullaniciID AS hastaKullaniciId,
                h.HastaID AS hastaId,
                kh.Ad + ' ' + kh.Soyad AS hastaAdi,
+               kh.Ad AS hastaAdSadece,
+               kh.Email AS hastaEmail,
                kd.Ad + ' ' + kd.Soyad AS doktorAdi,
-               CONVERT(varchar(10), r.RandevuTarihi, 23) AS tarih
+               CONVERT(varchar(10), r.RandevuTarihi, 23) AS tarih,
+               LEFT(CONVERT(varchar(5), r.RandevuSaati, 108), 5) AS saat
         FROM Randevular r
         JOIN Doktorlar d ON r.DoktorID = d.DoktorID
         JOIN Hastalar h ON r.HastaID = h.HastaID
@@ -78,9 +82,16 @@ router.patch('/randevular/:id/durum', async (req, res) => {
         WHERE r.RandevuID = @randevuId AND d.KullaniciID = @kullaniciId
       `);
 
-    const { hastaKullaniciId, hastaId, hastaAdi, doktorAdi, tarih } = bilgiSonuc.recordset[0];
+    const { hastaKullaniciId, hastaId, hastaAdi, hastaAdSadece, hastaEmail, doktorAdi, tarih, saat } = bilgiSonuc.recordset[0];
 
-    // Hastaya bildirim gönder
+    // Hastaya e-posta bildirimi gönder
+    if (hastaEmail) {
+      if (durum === 'Onaylandı')  emailService.randevuOnaylandi(hastaAdSadece, hastaEmail, doktorAdi, tarih, saat);
+      if (durum === 'İptal')      emailService.randevuIptalDoktor(hastaAdSadece, hastaEmail, doktorAdi, tarih);
+      if (durum === 'Tamamlandı') emailService.randevuTamamlandi(hastaAdSadece, hastaEmail, doktorAdi, tarih);
+    }
+
+    // Hastaya sistem bildirimi gönder
     const mesajlar = {
       'Onaylandı':  `Dr. ${doktorAdi} ile ${tarih} tarihli randevunuz onaylandı.`,
       'İptal':      `Dr. ${doktorAdi} ile ${tarih} tarihli randevunuz iptal edildi.`,
@@ -209,6 +220,73 @@ router.get('/randevular/:id/tibbi-kayit', async (req, res) => {
     res.json(sonuc.recordset[0] || null);
   } catch (err) {
     logger.error(`Tıbbi kayıt getirme hatası | randevuId=${req.params.id} kullaniciId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// GET /api/doktor/istatistikler — doktorun kendi performans özeti
+// ============================================================
+router.get('/istatistikler', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT
+          COUNT(*) AS toplamRandevu,
+          SUM(CASE WHEN r.Durum = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlanan,
+          SUM(CASE WHEN r.Durum = 'İptal'      THEN 1 ELSE 0 END) AS iptalEdilen,
+          SUM(CASE WHEN r.Durum = 'Gelmedi'    THEN 1 ELSE 0 END) AS gelmedi,
+          SUM(CASE WHEN r.Durum = 'Beklemede'  THEN 1 ELSE 0 END) AS bekleyen,
+          SUM(CASE WHEN r.Durum = 'Onaylandı'  THEN 1 ELSE 0 END) AS onaylandi,
+          SUM(CASE WHEN r.RandevuTarihi = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS bugun,
+          SUM(CASE WHEN r.RandevuTarihi >= DATEADD(day, -30, GETDATE()) THEN 1 ELSE 0 END) AS son30Gun,
+          COUNT(DISTINCT r.HastaID) AS benzersizHasta
+        FROM Randevular r
+        JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        WHERE d.KullaniciID = @kullaniciId
+      `);
+
+    // Aylık dağılım (son 6 ay)
+    const aylik = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT
+          FORMAT(RandevuTarihi, 'yyyy-MM') AS ay,
+          COUNT(*) AS sayi,
+          SUM(CASE WHEN r.Durum = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlanan
+        FROM Randevular r
+        JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        WHERE d.KullaniciID = @kullaniciId
+          AND r.RandevuTarihi >= DATEADD(month, -6, GETDATE())
+        GROUP BY FORMAT(r.RandevuTarihi, 'yyyy-MM')
+        ORDER BY ay
+      `);
+
+    // En sık gelen hastalar (top 5)
+    const topHastalar = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT TOP 5
+          k.Ad + ' ' + k.Soyad AS hastaAdi,
+          COUNT(*) AS randevuSayisi
+        FROM Randevular r
+        JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        JOIN Hastalar h ON r.HastaID = h.HastaID
+        JOIN Kullaniciler k ON h.KullaniciID = k.KullaniciID
+        WHERE d.KullaniciID = @kullaniciId AND r.Durum = N'Tamamlandı'
+        GROUP BY k.Ad, k.Soyad
+        ORDER BY randevuSayisi DESC
+      `);
+
+    res.json({
+      ozet: sonuc.recordset[0],
+      aylik: aylik.recordset,
+      topHastalar: topHastalar.recordset,
+    });
+  } catch (err) {
+    logger.error(`Doktor istatistik hatası | kullaniciId=${req.kullanici?.kullaniciId} hata="${err.message}"`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });

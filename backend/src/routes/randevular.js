@@ -3,6 +3,7 @@ const { getPool, sql } = require('../db');
 const authMiddleware = require('../middleware/auth');
 const randevuLogger = require('../randevuLogger');
 const logger = require('../logger');
+const emailService = require('../emailService');
 
 const router = express.Router();
 
@@ -132,6 +133,17 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Doktor adı ve uzmanlık bilgisini e-posta için al
+    const doktorBilgi = await pool.request()
+      .input('doktorId', sql.Int, doktorId)
+      .query(`
+        SELECT k.Ad + ' ' + k.Soyad AS DoktorAdi, u.UzmanlikAdi, k.Email AS DoktorEmail
+        FROM Doktorlar d
+        JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
+        JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+        WHERE d.DoktorID = @doktorId
+      `);
+
     // Randevuyu ekle
     await pool.request()
       .input('hastaId', sql.Int, hastaId)
@@ -143,6 +155,17 @@ router.post('/', async (req, res) => {
         INSERT INTO Randevular (HastaID, DoktorID, RandevuTarihi, RandevuSaati, Notlar)
         VALUES (@hastaId, @doktorId, CAST(@tarih AS DATE), CAST(@saat AS TIME), @notlar)
       `);
+
+    // Hastanın adını ve emailini al, bildirim e-postası gönder
+    const hastaKullanici = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query('SELECT Ad, Email FROM Kullaniciler WHERE KullaniciID = @kullaniciId');
+
+    if (hastaKullanici.recordset.length > 0 && doktorBilgi.recordset.length > 0) {
+      const { Ad, Email } = hastaKullanici.recordset[0];
+      const { DoktorAdi, UzmanlikAdi } = doktorBilgi.recordset[0];
+      emailService.randevuOlusturuldu(Ad, Email, DoktorAdi, UzmanlikAdi, tarih, saat.substring(0, 5));
+    }
 
     randevuLogger.info(`OLUŞTURULDU | hastaId=${req.kullanici.kullaniciId} doktorId=${doktorId} tarih=${tarih} saat=${saat} ip=${req.ip}`);
     res.status(201).json({ mesaj: 'Randevu oluşturuldu' });
@@ -311,6 +334,38 @@ router.get('/:id/tibbi-kayit', async (req, res) => {
     res.json(sonuc.recordset[0] || null);
   } catch (err) {
     logger.error(`Tıbbi kayıt getirme hatası: ${err.message}`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// GET /api/randevular/odemelerim
+// Hastanın kendi randevularına ait ödeme kayıtları
+// ============================================================
+router.get('/odemelerim', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT
+          o.OdemeID, o.Tutar, o.Durum, o.OdemeYontemi, o.Notlar,
+          o.OdemeTarihi, o.OlusturmaTarihi,
+          r.RandevuID, r.RandevuTarihi, r.RandevuSaati,
+          k.Ad + ' ' + k.Soyad AS DoktorAdi,
+          u.UzmanlikAdi
+        FROM Odemeler o
+        JOIN Randevular r ON o.RandevuID = r.RandevuID
+        JOIN Hastalar h ON r.HastaID = h.HastaID
+        JOIN Doktorlar d ON r.DoktorID = d.DoktorID
+        JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
+        JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+        WHERE h.KullaniciID = @kullaniciId
+        ORDER BY o.OlusturmaTarihi DESC
+      `);
+    res.json(sonuc.recordset);
+  } catch (err) {
+    logger.error(`Hasta ödeme listesi hatası: ${err.message}`);
     res.status(500).json({ hata: 'Sunucu hatası' });
   }
 });
