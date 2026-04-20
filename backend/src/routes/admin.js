@@ -453,4 +453,224 @@ router.get('/yoneticiler', async (req, res) => {
   }
 });
 
+// ============================================================
+// GET /api/admin/istatistikler/verimlilik — doktor performans tablosu
+// ============================================================
+router.get('/istatistikler/verimlilik', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT
+        k.Ad + ' ' + k.Soyad AS doktorAdi,
+        u.UzmanlikAdi,
+        COUNT(*) AS toplamRandevu,
+        SUM(CASE WHEN rv.Durum = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlanan,
+        SUM(CASE WHEN rv.Durum = 'İptal'      THEN 1 ELSE 0 END) AS iptalEdilen,
+        SUM(CASE WHEN rv.Durum = 'Gelmedi'    THEN 1 ELSE 0 END) AS gelmedi,
+        CASE WHEN COUNT(*) > 0
+          THEN CAST(ROUND(100.0 * SUM(CASE WHEN rv.Durum = 'Tamamlandı' THEN 1 ELSE 0 END) / COUNT(*), 1) AS FLOAT)
+          ELSE 0
+        END AS tamamlanmaOrani
+      FROM Doktorlar d
+      JOIN Kullaniciler k ON d.KullaniciID = k.KullaniciID
+      JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+      LEFT JOIN Randevular rv ON rv.DoktorID = d.DoktorID
+      GROUP BY k.Ad, k.Soyad, u.UzmanlikAdi
+      ORDER BY tamamlanan DESC
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    logger.error(`Admin hatası | endpoint="${req.method} ${req.path}" adminId=${req.kullanici?.kullaniciId} ip=${req.ip} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// POST /api/admin/bildirim/toplu — tüm hastalara duyuru gönder
+// ============================================================
+router.post('/bildirim/toplu', async (req, res) => {
+  const { baslik, mesaj } = req.body;
+  if (!baslik || !mesaj) return res.status(400).json({ hata: 'Başlık ve mesaj zorunludur' });
+  if (mesaj.length > 500) return res.status(400).json({ hata: 'Mesaj 500 karakterden uzun olamaz' });
+
+  try {
+    const pool = await getPool();
+    const emailService = require('../emailService');
+
+    // Tüm aktif hastaların kullanıcı bilgilerini al
+    const hastalar = await pool.request().query(`
+      SELECT k.KullaniciID, k.Ad, k.Email
+      FROM Kullaniciler k
+      JOIN Hastalar h ON h.KullaniciID = k.KullaniciID
+    `);
+
+    // Her hastaya sistem bildirimi + e-posta gönder
+    for (const hasta of hastalar.recordset) {
+      await pool.request()
+        .input('kullaniciId', sql.Int, hasta.KullaniciID)
+        .input('mesaj', sql.NVarChar, `📢 ${baslik}: ${mesaj}`)
+        .query('INSERT INTO Bildirimler (KullaniciID, Mesaj) VALUES (@kullaniciId, @mesaj)');
+
+      emailService.topluDuyuru(hasta.Ad, hasta.Email, baslik, mesaj);
+    }
+
+    logger.info(`TOPLU BİLDİRİM | adminId=${req.kullanici.kullaniciId} alıcı=${hastalar.recordset.length} baslik="${baslik}"`);
+    res.json({ mesaj: `${hastalar.recordset.length} hastaya bildirim gönderildi` });
+  } catch (err) {
+    logger.error(`Toplu bildirim hatası | adminId=${req.kullanici?.kullaniciId} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// POST /api/admin/yoneticiler — yeni admin ekle
+// ============================================================
+router.post('/yoneticiler', async (req, res) => {
+  const { ad, soyad, email, sifre } = req.body;
+  if (!ad || !soyad || !email || !sifre) return res.status(400).json({ hata: 'Tüm alanlar zorunludur' });
+  if (sifre.length < 6) return res.status(400).json({ hata: 'Şifre en az 6 karakter olmalıdır' });
+
+  try {
+    const pool = await getPool();
+    const sifreHash = await bcrypt.hash(sifre, 10);
+    await pool.request()
+      .input('email', sql.NVarChar, email)
+      .input('sifreHash', sql.NVarChar, sifreHash)
+      .input('ad', sql.NVarChar, ad)
+      .input('soyad', sql.NVarChar, soyad)
+      .query(`INSERT INTO Kullaniciler (Email, SifreHash, Rol, Ad, Soyad) VALUES (@email, @sifreHash, 'Admin', @ad, @soyad)`);
+
+    logger.info(`YENİ ADMIN EKLENDİ | email=${email} ad="${ad} ${soyad}" ekleyenAdmin=${req.kullanici.kullaniciId}`);
+    res.status(201).json({ mesaj: 'Yönetici eklendi' });
+  } catch (err) {
+    if (err.number === 2627) return res.status(409).json({ hata: 'Bu email zaten kayıtlı' });
+    logger.error(`Admin yönetici ekleme hatası | hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// DELETE /api/admin/yoneticiler/:id — admin sil (kendini silemez)
+router.delete('/yoneticiler/:id', async (req, res) => {
+  if (isNaN(parseInt(req.params.id))) return res.status(400).json({ hata: 'Geçersiz ID' });
+  if (parseInt(req.params.id) === req.kullanici.kullaniciId) {
+    return res.status(400).json({ hata: 'Kendi hesabınızı silemezsiniz' });
+  }
+  try {
+    const pool = await getPool();
+    const kontrol = await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query(`SELECT KullaniciID FROM Kullaniciler WHERE KullaniciID = @id AND Rol = 'Admin'`);
+    if (kontrol.recordset.length === 0) return res.status(404).json({ hata: 'Yönetici bulunamadı' });
+
+    await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query('DELETE FROM Kullaniciler WHERE KullaniciID = @id');
+
+    logger.info(`ADMIN SİLİNDİ | silinenId=${req.params.id} silenAdmin=${req.kullanici.kullaniciId}`);
+    res.json({ mesaj: 'Yönetici silindi' });
+  } catch (err) {
+    logger.error(`Admin silme hatası | hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// ÖDEME / FATURA SİSTEMİ
+// ============================================================
+
+// GET /api/admin/odemeler — tüm ödemeler
+router.get('/odemeler', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT
+        o.OdemeID, o.Tutar, o.Durum, o.OdemeTarihi, o.OdemeYontemi, o.Notlar,
+        kh.Ad + ' ' + kh.Soyad AS HastaAdi,
+        kd.Ad + ' ' + kd.Soyad AS DoktorAdi,
+        u.UzmanlikAdi,
+        CONVERT(varchar(10), rv.RandevuTarihi, 23) AS RandevuTarihi
+      FROM Odemeler o
+      JOIN Randevular rv ON o.RandevuID = rv.RandevuID
+      JOIN Hastalar h ON rv.HastaID = h.HastaID
+      JOIN Kullaniciler kh ON h.KullaniciID = kh.KullaniciID
+      JOIN Doktorlar d ON rv.DoktorID = d.DoktorID
+      JOIN Kullaniciler kd ON d.KullaniciID = kd.KullaniciID
+      JOIN Uzmanliklar u ON d.UzmanlikID = u.UzmanlikID
+      ORDER BY o.OlusturmaTarihi DESC
+    `);
+    res.json(r.recordset);
+  } catch (err) {
+    logger.error(`Ödeme listeleme hatası | hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// POST /api/admin/odemeler — yeni ödeme kaydı ekle
+router.post('/odemeler', async (req, res) => {
+  const { randevuId, tutar, odemeYontemi, notlar } = req.body;
+  if (!randevuId || !tutar) return res.status(400).json({ hata: 'Randevu ve tutar zorunludur' });
+  if (tutar <= 0) return res.status(400).json({ hata: 'Tutar 0\'dan büyük olmalıdır' });
+  const gecerliYontemler = ['Nakit', 'Kredi Kartı', 'Sigorta', 'SGK'];
+  if (odemeYontemi && !gecerliYontemler.includes(odemeYontemi)) {
+    return res.status(400).json({ hata: 'Geçersiz ödeme yöntemi' });
+  }
+
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('randevuId', sql.Int, randevuId)
+      .input('tutar', sql.Decimal(10, 2), tutar)
+      .input('odemeYontemi', sql.NVarChar, odemeYontemi || 'Nakit')
+      .input('notlar', sql.NVarChar, notlar || null)
+      .query(`
+        INSERT INTO Odemeler (RandevuID, Tutar, OdemeYontemi, Notlar)
+        VALUES (@randevuId, @tutar, @odemeYontemi, @notlar)
+      `);
+    logger.info(`ÖDEME EKLENDİ | randevuId=${randevuId} tutar=${tutar} adminId=${req.kullanici.kullaniciId}`);
+    res.status(201).json({ mesaj: 'Ödeme kaydedildi' });
+  } catch (err) {
+    logger.error(`Ödeme ekleme hatası | hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// PATCH /api/admin/odemeler/:id/durum — ödeme durumu güncelle
+router.patch('/odemeler/:id/durum', async (req, res) => {
+  const { durum } = req.body;
+  const gecerliDurumlar = ['Bekliyor', 'Ödendi', 'İptal'];
+  if (!durum || !gecerliDurumlar.includes(durum)) return res.status(400).json({ hata: 'Geçersiz durum' });
+
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .input('durum', sql.NVarChar, durum)
+      .query('UPDATE Odemeler SET Durum = @durum WHERE OdemeID = @id');
+    res.json({ mesaj: 'Ödeme durumu güncellendi' });
+  } catch (err) {
+    logger.error(`Ödeme güncelleme hatası | hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// GET /api/admin/odemeler/ozet — ödeme istatistikleri
+router.get('/odemeler/ozet', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const r = await pool.request().query(`
+      SELECT
+        COUNT(*) AS toplamIslem,
+        SUM(CASE WHEN Durum = 'Ödendi' THEN Tutar ELSE 0 END) AS toplamGelir,
+        SUM(CASE WHEN Durum = 'Bekliyor' THEN Tutar ELSE 0 END) AS bekleyenTutar,
+        SUM(CASE WHEN Durum = 'Ödendi' THEN 1 ELSE 0 END) AS odenenSayi,
+        SUM(CASE WHEN Durum = 'Bekliyor' THEN 1 ELSE 0 END) AS bekleyenSayi
+      FROM Odemeler
+    `);
+    res.json(r.recordset[0]);
+  } catch (err) {
+    logger.error(`Ödeme özet hatası | hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
 module.exports = router;
