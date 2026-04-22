@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://192.168.1.191:3000/api';
+const BASE_URL = 'http://192.168.1.7:3000/api';
 
 const ADMIN_BASIC_TOKEN = btoa('admin:HastaneAdmin2024!');
 
