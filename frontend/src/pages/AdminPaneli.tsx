@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
 import { api } from '../api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   // eslint-disable-next-line @typescript-eslint/no-deprecated
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  Tooltip, ResponsiveContainer, PieChart, Pie,
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  Cell,
   BarChart, Bar
 } from 'recharts'
 
@@ -19,10 +21,10 @@ const DURUM_RENKLERI: Record<string, string> = {
 }
 
 const durumRenk: Record<string, string> = {
-  'Onaylandı': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  'Beklemede': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+  'Onaylandı':  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  'Beklemede':  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
   'Tamamlandı': 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-  'İptal': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  'İptal':      'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 }
 
 interface AdminHasta {
@@ -66,7 +68,6 @@ interface AdminDoktor {
   Durum: 'Aktif' | 'İzinli' | 'Ayrıldı'
 }
 
-
 interface Yonetici {
   KullaniciID: number
   Ad: string
@@ -74,12 +75,29 @@ interface Yonetici {
   Email: string
 }
 
+type Sekme = 'dashboard' | 'randevular' | 'doktorlar' | 'hastalar' | 'istatistikler' | 'verimlilik' | 'odemeler' | 'duyuru' | 'yoneticiler'
+
 const bos = { ad: '', soyad: '', email: '', sifre: '', uzmanlikAdi: '', telefon: '' }
+
+const NAV_ITEMS: { key: Sekme; icon: string; label: string }[] = [
+  { key: 'dashboard',     icon: '📊', label: 'Dashboard' },
+  { key: 'randevular',    icon: '📅', label: 'Randevular' },
+  { key: 'doktorlar',     icon: '👨‍⚕️', label: 'Doktorlar' },
+  { key: 'hastalar',      icon: '👥', label: 'Hastalar' },
+  { key: 'istatistikler', icon: '📈', label: 'İstatistikler' },
+  { key: 'verimlilik',    icon: '🏆', label: 'Verimlilik' },
+  { key: 'odemeler',      icon: '💰', label: 'Ödemeler' },
+  { key: 'duyuru',        icon: '📢', label: 'Duyuru' },
+  { key: 'yoneticiler',   icon: '⚙️', label: 'Yöneticiler' },
+]
 
 export default function AdminPaneli() {
   const { theme, toggle } = useTheme()
   const { kullanici, cikisYap } = useAuth()
   const navigate = useNavigate()
+
+  const [aktifSekme, setAktifSekme] = useState<Sekme>('dashboard')
+  const [sidebarAcik, setSidebarAcik] = useState(false)
 
   const [istatistik, setIstatistik] = useState({ toplamHasta: 0, toplamDoktor: 0, toplamRandevu: 0, bekleyen: 0 })
   const [randevular, setRandevular] = useState<AdminRandevu[]>([])
@@ -87,9 +105,7 @@ export default function AdminPaneli() {
   const [yoneticiler, setYoneticiler] = useState<Yonetici[]>([])
   const [hastalar, setHastalar] = useState<AdminHasta[]>([])
   const [acikHastaId, setAcikHastaId] = useState<number | null>(null)
-  const [aktifSekme, setAktifSekme] = useState<'randevular' | 'doktorlar' | 'hastalar' | 'yoneticiler' | 'istatistikler' | 'verimlilik' | 'odemeler' | 'duyuru'>('randevular')
 
-  // Yeni state'ler
   const [verimlilikVeri, setVerimlilikVeri] = useState<{ doktorAdi: string; uzmanlikAdi: string; toplamRandevu: number; tamamlanan: number; iptalEdilen: number; gelmedi: number; tamamlanmaOrani: number }[]>([])
   const [odemeler, setOdemeler] = useState<{ OdemeID: number; HastaAdi: string; DoktorAdi: string; UzmanlikAdi: string; RandevuTarihi: string; Tutar: number; Durum: string; OdemeYontemi: string }[]>([])
   const [odemeOzet, setOdemeOzet] = useState<{ toplamGelir: number; bekleyenTutar: number; odenenSayi: number; bekleyenSayi: number } | null>(null)
@@ -113,6 +129,7 @@ export default function AdminPaneli() {
     enYogunUzmanliklar: { UzmanlikAdi: string; randevuSayisi: number }[]
   } | null>(null)
   const [csvYukleniyor, setCsvYukleniyor] = useState(false)
+  const [yenileniyor, setYenileniyor] = useState(false)
   const [aramaMetni, setAramaMetni] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('Tümü')
   const [tarihBas, setTarihBas] = useState('')
@@ -121,12 +138,12 @@ export default function AdminPaneli() {
   const [doktorFormu, setDoktorFormu] = useState(false)
   const [yeniDoktor, setYeniDoktor] = useState(bos)
   const [formHata, setFormHata] = useState('')
+  const [durumFormu, setDurumFormu] = useState<{ doktorId: number | null; durum: string; izinBaslangic: string; izinBitis: string }>({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })
 
-  useEffect(() => {
-    yukle()
-  }, [])
+  useEffect(() => { yukle() }, [])
 
   async function yukle() {
+    setYenileniyor(true)
     try {
       const [ist, r, d, h, y, g, uz, dok, dur, saat, iptal, ozet] = await Promise.all([
         api.adminIstatistikler(),
@@ -154,7 +171,7 @@ export default function AdminPaneli() {
       setSaatVeri(saat)
       setIptalListesi(iptal)
       setOzetIst(ozet)
-    } catch (err: unknown) {
+    } catch (err) {
       console.error('Admin verileri yüklenemedi:', err)
     }
     try {
@@ -166,9 +183,10 @@ export default function AdminPaneli() {
       setVerimlilikVeri(ver)
       setOdemeler(od)
       setOdemeOzet(ozet)
-    } catch (err: unknown) {
+    } catch (err) {
       console.error('Verimlilik/ödeme yüklenemedi:', err)
     }
+    setYenileniyor(false)
   }
 
   function cikis() { cikisYap(); navigate('/giris') }
@@ -177,8 +195,7 @@ export default function AdminPaneli() {
     await api.adminRandevuDurum(id, durum)
     setRandevular(prev => {
       const guncellendi = prev.map(r => r.RandevuID === id ? { ...r, Durum: durum } : r)
-      const bekleyen = guncellendi.filter(r => r.Durum === 'Beklemede').length
-      setIstatistik(ist => ({ ...ist, bekleyen }))
+      setIstatistik(ist => ({ ...ist, bekleyen: guncellendi.filter(r => r.Durum === 'Beklemede').length }))
       return guncellendi
     })
   }
@@ -198,8 +215,7 @@ export default function AdminPaneli() {
       await api.adminDoktorEkle(yeniDoktor)
       setYeniDoktor(bos)
       setDoktorFormu(false)
-      const d = await api.adminDoktorlar()
-      setDoktorlar(d)
+      setDoktorlar(await api.adminDoktorlar())
     } catch (err: unknown) {
       setFormHata(err instanceof Error ? err.message : 'Hata oluştu')
     }
@@ -209,8 +225,6 @@ export default function AdminPaneli() {
     await api.adminDoktorSil(id)
     setDoktorlar(prev => prev.filter(d => d.DoktorID !== id))
   }
-
-  const [durumFormu, setDurumFormu] = useState<{ doktorId: number | null, durum: string, izinBaslangic: string, izinBitis: string }>({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })
 
   async function doktorDurumGuncelle() {
     if (!durumFormu.doktorId) return
@@ -228,757 +242,743 @@ export default function AdminPaneli() {
                        r.DoktorAdi?.toLowerCase().includes(aramaMetni.toLowerCase())
     const durumUygun = durumFiltre === 'Tümü' || r.Durum === durumFiltre
     const tarih = r.RandevuTarihi.split('T')[0]
-    const basUygun = !tarihBas || tarih >= tarihBas
-    const bitUygun = !tarihBit || tarih <= tarihBit
-    return aramaUygun && durumUygun && basUygun && bitUygun
+    return aramaUygun && durumUygun && (!tarihBas || tarih >= tarihBas) && (!tarihBit || tarih <= tarihBit)
   })
 
   const filtreliHastalar = hastalar.filter(h =>
     `${h.Ad} ${h.Soyad} ${h.Email}`.toLowerCase().includes(hastaArama.toLowerCase())
   )
 
-  const inputCls = "w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+  const inp = 'w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300'
+
+  function navGit(key: Sekme) { setAktifSekme(key); setSidebarAcik(false) }
+
+  const bugunStr = new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <nav className="bg-white dark:bg-gray-800 shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl">🏥</span>
-          <span className="text-xl font-bold text-blue-700 dark:text-blue-400">MediRandevu</span>
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <span className="text-gray-600 dark:text-gray-300 font-medium text-sm hidden sm:block">
-            🛡️ {kullanici?.ad} {kullanici?.soyad}
-          </span>
-          <button onClick={toggle} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-lg">
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-          <button onClick={cikis} className="text-red-500 hover:text-red-600 text-sm font-medium">Çıkış Yap</button>
-        </div>
-      </nav>
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-8 py-10">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-8">Admin Paneli</h1>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { icon: '👥', sayi: istatistik.toplamHasta, etiket: 'Toplam Hasta' },
-            { icon: '👨‍⚕️', sayi: istatistik.toplamDoktor, etiket: 'Toplam Doktor' },
-            { icon: '📅', sayi: istatistik.toplamRandevu, etiket: 'Toplam Randevu' },
-            { icon: '⏳', sayi: istatistik.bekleyen, etiket: 'Bekleyen' },
-          ].map((k) => (
-            <div key={k.etiket} className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 shadow-sm flex items-center gap-3 sm:gap-4">
-              <span className="text-2xl sm:text-3xl">{k.icon}</span>
-              <div>
-                <p className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100">{k.sayi}</p>
-                <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">{k.etiket}</p>
-              </div>
-            </div>
-          ))}
+      {/* ── Sidebar ── */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 flex flex-col
+        transition-transform duration-200
+        ${sidebarAcik ? 'translate-x-0' : '-translate-x-full'}
+        lg:relative lg:translate-x-0 lg:shrink-0
+      `}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-700/60">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-xl shrink-0">🏥</div>
+          <div>
+            <p className="text-white font-bold text-sm leading-tight">MediRandevu</p>
+            <p className="text-slate-400 text-xs">Admin Paneli</p>
+          </div>
         </div>
 
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-          {([
-            { key: 'randevular',   label: '📋 Randevular' },
-            { key: 'doktorlar',    label: '👨‍⚕️ Doktorlar' },
-            { key: 'hastalar',     label: '👥 Hastalar' },
-            { key: 'istatistikler',label: '📈 İstatistikler' },
-            { key: 'verimlilik',   label: '🏆 Verimlilik' },
-            { key: 'odemeler',     label: '💰 Ödemeler' },
-            { key: 'duyuru',       label: '📢 Duyuru' },
-            { key: 'yoneticiler',  label: '🛡️ Yöneticiler' },
-          ] as const).map(s => (
-            <button key={s.key} onClick={() => setAktifSekme(s.key)}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition whitespace-nowrap ${aktifSekme === s.key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-              {s.label}
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.key}
+              onClick={() => navGit(item.key)}
+              className={`
+                w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
+                ${aktifSekme === item.key
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+              `}
+            >
+              <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.key === 'randevular' && istatistik.bekleyen > 0 && (
+                <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold min-w-5 text-center">
+                  {istatistik.bekleyen}
+                </span>
+              )}
             </button>
           ))}
+        </nav>
+
+        {/* User */}
+        <div className="px-4 py-4 border-t border-slate-700/60">
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
+              {(kullanici?.ad?.[0] ?? '') + (kullanici?.soyad?.[0] ?? '')}
+            </div>
+            <div className="min-w-0">
+              <p className="text-white text-xs font-semibold truncate">{kullanici?.ad} {kullanici?.soyad}</p>
+              <p className="text-slate-400 text-xs">Yönetici</p>
+            </div>
+          </div>
+          <button
+            onClick={cikis}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 text-xs font-medium transition"
+          >
+            <span>🚪</span> Çıkış Yap
+          </button>
         </div>
+      </aside>
 
-        {/* RANDEVULAR */}
-        {aktifSekme === 'randevular' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col gap-3 mb-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input type="text" placeholder="Hasta veya doktor ara..." value={aramaMetni} onChange={e => setAramaMetni(e.target.value)}
-                  className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 placeholder-gray-400" />
-                <select value={durumFiltre} onChange={e => setDurumFiltre(e.target.value)}
-                  className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                  <option>Tümü</option>
-                  <option>Beklemede</option>
-                  <option>Onaylandı</option>
-                  <option>Tamamlandı</option>
-                  <option>İptal</option>
-                </select>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 items-center">
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Tarih:</span>
-                  <input type="date" value={tarihBas} onChange={e => setTarihBas(e.target.value)}
-                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
-                  <span className="text-xs text-gray-400 shrink-0">—</span>
-                  <input type="date" value={tarihBit} onChange={e => setTarihBit(e.target.value)}
-                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
-                </div>
-                {(aramaMetni || durumFiltre !== 'Tümü' || tarihBas || tarihBit) && (
-                  <button onClick={() => { setAramaMetni(''); setDurumFiltre('Tümü'); setTarihBas(''); setTarihBit('') }}
-                    className="text-xs text-gray-400 hover:text-red-500 transition shrink-0">
-                    Filtreleri Temizle ✕
-                  </button>
-                )}
-                <button
-                  onClick={async () => {
-                    setCsvYukleniyor(true)
-                    try { await api.adminCsvIndir(durumFiltre, tarihBas, tarihBit) }
-                    catch { alert('CSV indirilemedi') }
-                    finally { setCsvYukleniyor(false) }
-                  }}
-                  disabled={csvYukleniyor}
-                  className="text-xs bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50 shrink-0"
-                >
-                  {csvYukleniyor ? 'İndiriliyor...' : '⬇ CSV İndir'}
-                </button>
-              </div>
-            </div>
+      {/* Mobile overlay */}
+      {sidebarAcik && (
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarAcik(false)} />
+      )}
 
-            <div className="flex flex-col gap-3">
-              {filtreliRandevular.length === 0 && <p className="text-center text-gray-400 py-8">Randevu bulunamadı.</p>}
-              {filtreliRandevular.map((r) => (
-                <div key={r.RandevuID} className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 transition">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-xl shrink-0">👤</span>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{r.HastaAdi}</p>
-                        <p className="text-gray-500 dark:text-gray-400 text-xs truncate">Dr. {r.DoktorAdi} · {r.UzmanlikAdi}</p>
-                      </div>
-                    </div>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${durumRenk[r.Durum] ?? ''}`}>{r.Durum}</span>
-                  </div>
-                  <div className="flex items-center justify-between pl-9">
-                    <p className="text-gray-500 dark:text-gray-400 text-xs">{r.RandevuTarihi.split('T')[0]} · {String(r.RandevuSaati).substring(0, 5)}</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {r.Durum === 'Beklemede' && <button onClick={() => randevuDurum(r.RandevuID, 'Onaylandı')} className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">Onayla</button>}
-                      {(r.Durum === 'Beklemede' || r.Durum === 'Onaylandı') && <button onClick={() => randevuDurum(r.RandevuID, 'İptal')} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1 rounded-lg hover:bg-red-200 transition">İptal Et</button>}
-                      {r.Durum === 'İptal' && <button onClick={() => randevuSil(r.RandevuID)} className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 px-3 py-1 rounded-lg transition">Sil</button>}
-                    </div>
-                  </div>
-                </div>
-              ))}
+      {/* ── Main area ── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Top header */}
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 h-16 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarAcik(true)}
+              className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl p-1"
+            >
+              ☰
+            </button>
+            <div>
+              <h1 className="text-base font-bold text-gray-800 dark:text-gray-100 leading-tight">
+                {NAV_ITEMS.find(n => n.key === aktifSekme)?.label ?? 'Dashboard'}
+              </h1>
+              <p className="text-xs text-gray-400 hidden sm:block">{bugunStr}</p>
             </div>
           </div>
-        )}
-
-        {/* DOKTORLAR */}
-        {aktifSekme === 'doktorlar' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Doktor Listesi</h2>
-              <button onClick={() => { setDoktorFormu(!doktorFormu); setYeniDoktor(bos); setFormHata('') }} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">+ Yeni Doktor Ekle</button>
-            </div>
-
-            {doktorFormu && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 mb-4">
-                {formHata && <p className="text-red-500 text-sm mb-3">{formHata}</p>}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Ad *</label><input type="text" placeholder="Adı" value={yeniDoktor.ad} onChange={e => setYeniDoktor({ ...yeniDoktor, ad: e.target.value })} className={inputCls} /></div>
-                  <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Soyad *</label><input type="text" placeholder="Soyadı" value={yeniDoktor.soyad} onChange={e => setYeniDoktor({ ...yeniDoktor, soyad: e.target.value })} className={inputCls} /></div>
-                  <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">E-posta *</label><input type="email" placeholder="doktor@hastane.com" value={yeniDoktor.email} onChange={e => setYeniDoktor({ ...yeniDoktor, email: e.target.value })} className={inputCls} /></div>
-                  <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Geçici Şifre *</label><input type="password" placeholder="••••••••" value={yeniDoktor.sifre} onChange={e => setYeniDoktor({ ...yeniDoktor, sifre: e.target.value })} className={inputCls} /></div>
-                  <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Uzmanlık *</label>
-                    <select value={yeniDoktor.uzmanlikAdi} onChange={e => setYeniDoktor({ ...yeniDoktor, uzmanlikAdi: e.target.value })} className={inputCls}>
-                      <option value="">Seçiniz</option>
-                      <option>Kardiyoloji</option><option>Ortopedi</option><option>Nöroloji</option>
-                      <option>Göz Hastalıkları</option><option>Dahiliye</option><option>Psikiyatri</option>
-                      <option>Çocuk Sağlığı</option><option>Dermatoloji</option>
-                    </select>
-                  </div>
-                  <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Telefon</label><input type="tel" placeholder="05XX XXX XX XX" value={yeniDoktor.telefon} onChange={e => setYeniDoktor({ ...yeniDoktor, telefon: e.target.value })} className={inputCls} /></div>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={doktorEkle} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition">Ekle</button>
-                  <button onClick={() => { setDoktorFormu(false); setYeniDoktor(bos); setFormHata('') }} className="text-gray-400 hover:text-gray-600 px-4 py-2 text-sm">Vazgeç</button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3">
-              {doktorlar.map((d) => (
-                <div key={d.DoktorID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                  {/* Doktor satırı */}
-                  <div className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-2xl shrink-0">👨‍⚕️</span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {d.Ad} {d.Soyad}</p>
-                          {/* Durum badge — renge göre değişiyor */}
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            d.Durum === 'Aktif'   ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
-                            d.Durum === 'İzinli'  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' :
-                                                    'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
-                          }`}>
-                            {d.Durum}
-                          </span>
-                        </div>
-                        <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{d.UzmanlikAdi} · {d.Email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Durum Değiştir butonu — forma aç/kapat */}
-                      <button
-                        onClick={() => setDurumFormu(
-                          durumFormu.doktorId === d.DoktorID
-                            ? { doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' }
-                            : { doktorId: d.DoktorID, durum: d.Durum, izinBaslangic: '', izinBitis: '' }
-                        )}
-                        className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition"
-                      >
-                        Durum Değiştir
-                      </button>
-                      <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">Kaldır</button>
-                    </div>
-                  </div>
-
-                  {/* Durum değiştirme formu — sadece bu doktor için açık */}
-                  {durumFormu.doktorId === d.DoktorID && (
-                    <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 p-4">
-                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">Durum Güncelle — Dr. {d.Ad} {d.Soyad}</p>
-                      <div className="flex flex-wrap gap-3 items-end">
-                        {/* Durum seçimi */}
-                        <div>
-                          <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Durum</label>
-                          <select
-                            value={durumFormu.durum}
-                            onChange={e => setDurumFormu({ ...durumFormu, durum: e.target.value })}
-                            className={inputCls + ' w-36'}
-                          >
-                            <option value="Aktif">Aktif</option>
-                            <option value="İzinli">İzinli</option>
-                            <option value="Ayrıldı">Ayrıldı</option>
-                          </select>
-                        </div>
-
-                        {/* Planlı izin tarihleri — sadece İzinli seçilince göster */}
-                        {durumFormu.durum === 'İzinli' && (
-                          <>
-                            <div>
-                              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">İzin Başlangıç</label>
-                              <input type="date" value={durumFormu.izinBaslangic} onChange={e => setDurumFormu({ ...durumFormu, izinBaslangic: e.target.value })} className={inputCls + ' w-40'} />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">İzin Bitiş</label>
-                              <input type="date" value={durumFormu.izinBitis} onChange={e => setDurumFormu({ ...durumFormu, izinBitis: e.target.value })} className={inputCls + ' w-40'} />
-                            </div>
-                          </>
-                        )}
-
-                        <div className="flex gap-2">
-                          <button onClick={doktorDurumGuncelle} className="text-xs bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium">Kaydet</button>
-                          <button onClick={() => setDurumFormu({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-2">Vazgeç</button>
-                        </div>
-                      </div>
-                      {/* Anlık izin / Ayrıldı uyarısı */}
-                      {(durumFormu.durum === 'Ayrıldı' || (durumFormu.durum === 'İzinli' && !durumFormu.izinBaslangic)) && (
-                        <p className="text-xs text-red-500 mt-2">
-                          ⚠️ {durumFormu.durum === 'Ayrıldı' ? 'Doktorun tüm gelecek randevuları iptal edilecek.' : 'Tarih girilmezse anlık izin olarak işlenir — tüm randevular iptal edilir.'}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={yukle}
+              disabled={yenileniyor}
+              title="Verileri Yenile"
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm disabled:opacity-60"
+            >
+              <span className={yenileniyor ? 'animate-spin inline-block' : ''}>🔄</span>
+            </button>
+            <button
+              onClick={toggle}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm"
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
           </div>
-        )}
+        </header>
 
-        {/* HASTALAR */}
-        {aktifSekme === 'hastalar' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Hasta Listesi</h2>
-              <input type="text" placeholder="İsim veya e-posta ara..." value={hastaArama} onChange={e => setHastaArama(e.target.value)}
-                className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full sm:w-64 placeholder-gray-400" />
-            </div>
-            <div className="flex flex-col gap-3">
-              {filtreliHastalar.length === 0 && <p className="text-center text-gray-400 py-8">Hasta bulunamadı.</p>}
-              {filtreliHastalar.map((h) => (
-                <div key={h.HastaID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                  <button
-                    onClick={() => setAcikHastaId(acikHastaId === h.HastaID ? null : h.HastaID)}
-                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition text-left"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-2xl shrink-0">👤</span>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{h.Ad} {h.Soyad}</p>
-                        <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{h.Email} · {h.ToplamRandevu} randevu</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {h.KanGrubu && <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-medium">{h.KanGrubu}</span>}
-                      <span className="text-gray-400 text-xs">{acikHastaId === h.HastaID ? '▲' : '▼'}</span>
-                    </div>
-                  </button>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
 
-                  {acikHastaId === h.HastaID && (
-                    <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 pt-4 text-sm">
+          {/* ══ DASHBOARD ══ */}
+          {aktifSekme === 'dashboard' && (
+            <div className="flex flex-col gap-6">
 
-                        <div>
-                          <p className="text-xs text-gray-400 mb-0.5">TC Kimlik</p>
-                          <p className="text-gray-700 dark:text-gray-200">{h.TCKimlik ?? '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400 mb-0.5">Doğum Tarihi</p>
-                          <p className="text-gray-700 dark:text-gray-200">{h.DogumTarihi ? h.DogumTarihi.substring(0, 10) : '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400 mb-0.5">Cinsiyet</p>
-                          <p className="text-gray-700 dark:text-gray-200">{h.Cinsiyet ?? '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400 mb-0.5">Telefon</p>
-                          <p className="text-gray-700 dark:text-gray-200">{h.Telefon ?? '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400 mb-0.5">Kan Grubu</p>
-                          <p className="text-gray-700 dark:text-gray-200">{h.KanGrubu ?? '—'}</p>
-                        </div>
-                        <div className="sm:col-span-1">
-                          <p className="text-xs text-gray-400 mb-0.5">Adres</p>
-                          <p className="text-gray-700 dark:text-gray-200">{h.Adres ?? '—'}</p>
-                        </div>
-
-                        {(h.KronikHastaliklar || h.Alerjiler || h.SurekliIlaclar) && (
-                          <div className="col-span-2 sm:col-span-3 border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
-                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Sağlık Bilgileri</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div>
-                                <p className="text-xs text-gray-400 mb-0.5">Kronik Hastalıklar</p>
-                                <p className="text-gray-700 dark:text-gray-200">{h.KronikHastaliklar ?? '—'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-400 mb-0.5">Alerjiler</p>
-                                <p className="text-gray-700 dark:text-gray-200">{h.Alerjiler ?? '—'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-400 mb-0.5">Sürekli İlaçlar</p>
-                                <p className="text-gray-700 dark:text-gray-200">{h.SurekliIlaclar ?? '—'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {(h.AcilKisiAd || h.AcilKisiTelefon) && (
-                          <div className="col-span-2 sm:col-span-3 border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
-                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Acil İletişim</p>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <p className="text-xs text-gray-400 mb-0.5">Kişi</p>
-                                <p className="text-gray-700 dark:text-gray-200">{h.AcilKisiAd ?? '—'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-400 mb-0.5">Telefon</p>
-                                <p className="text-gray-700 dark:text-gray-200">{h.AcilKisiTelefon ?? '—'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* İSTATİSTİKLER */}
-        {aktifSekme === 'istatistikler' && (
-          <div className="flex flex-col gap-6">
-
-            {/* Çizgi grafik — günlük randevu */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Son 30 Günlük Randevu</h2>
-              <p className="text-gray-400 text-xs mb-4">Her güne ait toplam randevu sayısı</p>
-              {gunlukVeri.length === 0 ? (
-                <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={gunlukVeri} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="tarih" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v) => v.slice(5)} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} width={30} />
-                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f9fafb' }} formatter={(v) => [`${v} randevu`, '']} labelFormatter={(l) => `Tarih: ${l}`} />
-                    <Line type="monotone" dataKey="sayi" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4, fill: '#2563eb' }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                <div className="text-center">
-                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.reduce((t, g) => t + g.sayi, 0)}</p>
-                  <p className="text-xs text-gray-400 mt-1">30 gün toplam</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.length > 0 ? Math.max(...gunlukVeri.map(g => g.sayi)) : 0}</p>
-                  <p className="text-xs text-gray-400 mt-1">En yoğun gün</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.length > 0 ? (gunlukVeri.reduce((t, g) => t + g.sayi, 0) / gunlukVeri.length).toFixed(1) : 0}</p>
-                  <p className="text-xs text-gray-400 mt-1">Günlük ortalama</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              {/* Pasta grafik — uzmanlık dağılımı */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Uzmanlığa Göre Randevu</h2>
-                <p className="text-gray-400 text-xs mb-4">Hangi bölüme ne kadar başvuru var</p>
-                {uzmanlikVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={uzmanlikVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} %${((percent ?? 0) * 100).toFixed(0)}`} labelLine={false}>
-                        {uzmanlikVeri.map((_, i) => (
-                          <Cell key={i} fill={PASTA_RENKLERI[i % PASTA_RENKLERI.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              {/* Pasta grafik — durum dağılımı + iptal listesi */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Randevu Durum Dağılımı</h2>
-                <p className="text-gray-400 text-xs mb-4">İptal oranı yüksekse dikkat</p>
-                {durumVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={durumVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({ name, percent }) => `${name} %${((percent ?? 0) * 100).toFixed(0)}`} labelLine={false}>
-                        {durumVeri.map((entry, i) => (
-                          <Cell key={i} fill={DURUM_RENKLERI[entry.isim] ?? PASTA_RENKLERI[i]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-
-                {/* Son 30 günde iptal edilen randevular */}
-                {iptalListesi.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                    <p className="text-xs font-semibold text-red-500 mb-2">❌ Son 30 Günde İptal Edilenler</p>
-                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-                      {iptalListesi.map((r, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
-                          <div>
-                            <p className="font-medium text-gray-800 dark:text-gray-100">{r.hastaAdi}</p>
-                            <p className="text-gray-400">Dr. {r.doktorAdi} · {r.uzmanlikAdi}</p>
-                          </div>
-                          <p className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{r.tarih}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Yatay bar grafik — en çok randevu alan doktorlar */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Çok Randevu Alan Doktorlar</h2>
-                <p className="text-gray-400 text-xs mb-4">İlk 5 doktor</p>
-                {doktorVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={doktorVeri} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                      <YAxis type="category" dataKey="isim" tick={{ fontSize: 11, fill: '#9ca3af' }} width={100} />
-                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
-                      <Bar dataKey="sayi" fill="#2563eb" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              {/* Bar grafik — saate göre yoğunluk */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Saate Göre Yoğunluk</h2>
-                <p className="text-gray-400 text-xs mb-4">Hangi saatler dolu taşıyor</p>
-                {saatVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={saatVeri} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="saat" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} width={30} />
-                      <Tooltip formatter={(v) => [`${v} randevu`, '']} />
-                      <Bar dataKey="sayi" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-            </div>
-
-            {/* ÖZET İSTATİSTİKLER */}
-            {ozetIst && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-
-                {/* En çok iptal eden hastalar */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Çok İptal Eden Hastalar</h2>
-                  <p className="text-gray-400 text-xs mb-4">İlk 5 hasta</p>
-                  {ozetIst.enCokIptalEdenHastalar.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4">Veri yok</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {ozetIst.enCokIptalEdenHastalar.map((h, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="text-gray-700 dark:text-gray-200 truncate">{h.hastaAdi}</span>
-                          <span className="text-red-500 font-semibold shrink-0 ml-2">{h.iptalSayisi} iptal</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* En meşgul doktorlar */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Meşgul Doktorlar</h2>
-                  <p className="text-gray-400 text-xs mb-4">Aktif randevu sayısına göre</p>
-                  {ozetIst.enMesgulDoktorlar.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4">Veri yok</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {ozetIst.enMesgulDoktorlar.map((d, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <div className="min-w-0">
-                            <p className="text-gray-700 dark:text-gray-200 truncate">{d.doktorAdi}</p>
-                            <p className="text-gray-400 text-xs truncate">{d.uzmanlikAdi}</p>
-                          </div>
-                          <span className="text-blue-500 font-semibold shrink-0 ml-2">{d.randevuSayisi}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* En yoğun uzmanlıklar */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">En Yoğun Uzmanlıklar</h2>
-                  <p className="text-gray-400 text-xs mb-4">İptal hariç randevu sayısı</p>
-                  {ozetIst.enYogunUzmanliklar.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4">Veri yok</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {ozetIst.enYogunUzmanliklar.map((u, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="text-gray-700 dark:text-gray-200 truncate">{u.UzmanlikAdi}</span>
-                          <span className="text-green-600 font-semibold shrink-0 ml-2">{u.randevuSayisi}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* YÖNETİCİLER */}
-        {aktifSekme === 'yoneticiler' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Yönetici Listesi</h2>
-              <button onClick={() => setYoneticiFormu(f => !f)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition">
-                + Yeni Yönetici
-              </button>
-            </div>
-            {yoneticiFormu && (
-              <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input placeholder="Ad" value={yeniYonetici.ad} onChange={e => setYeniYonetici(f => ({ ...f, ad: e.target.value }))} className={inputCls} />
-                <input placeholder="Soyad" value={yeniYonetici.soyad} onChange={e => setYeniYonetici(f => ({ ...f, soyad: e.target.value }))} className={inputCls} />
-                <input placeholder="Email" value={yeniYonetici.email} onChange={e => setYeniYonetici(f => ({ ...f, email: e.target.value }))} className={inputCls} />
-                <input placeholder="Şifre (min. 6 karakter)" type="password" value={yeniYonetici.sifre} onChange={e => setYeniYonetici(f => ({ ...f, sifre: e.target.value }))} className={inputCls} />
-                {yoneticiHata && <p className="sm:col-span-2 text-red-500 text-xs">{yoneticiHata}</p>}
-                <button onClick={async () => {
-                  setYoneticiHata('')
-                  try {
-                    await api.adminYoneticiEkle(yeniYonetici)
-                    setYoneticiFormu(false)
-                    setYeniYonetici({ ad: '', soyad: '', email: '', sifre: '' })
-                    const y = await api.adminYoneticiler()
-                    setYoneticiler(y)
-                  } catch (err: unknown) { setYoneticiHata(err instanceof Error ? err.message : 'Hata') }
-                }} className="sm:col-span-2 bg-green-600 text-white py-2 rounded-lg text-sm hover:bg-green-700 transition">Ekle</button>
-              </div>
-            )}
-            <div className="flex flex-col gap-3">
-              {yoneticiler.map((y) => (
-                <div key={y.KullaniciID} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">🛡️</span>
-                    <div>
-                      <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{y.Ad} {y.Soyad}</p>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs">{y.Email}</p>
-                    </div>
-                  </div>
-                  <button onClick={async () => {
-                    if (!confirm(`${y.Ad} ${y.Soyad} yöneticisini silmek istediğinizden emin misiniz?`)) return
-                    try {
-                      await api.adminYoneticiSil(y.KullaniciID)
-                      setYoneticiler(prev => prev.filter(y2 => y2.KullaniciID !== y.KullaniciID))
-                    } catch (err: unknown) { alert(err instanceof Error ? err.message : 'Silinemedi') }
-                  }} className="text-xs text-red-500 hover:text-red-700 font-medium">Sil</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* VERİMLİLİK */}
-        {aktifSekme === 'verimlilik' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Doktor Verimlilik Raporu</h2>
-              <button onClick={async () => { const v = await api.adminVerimlilik(); setVerimlilikVeri(v) }}
-                className="text-sm text-blue-600 hover:underline">Yenile</button>
-            </div>
-            {verimlilikVeri.length === 0 ? (
-              <div className="text-center py-10">
-                <p className="text-gray-400 text-sm mb-3">Verimlilik verilerini yüklemek için butona tıklayın.</p>
-                <button onClick={async () => { const v = await api.adminVerimlilik(); setVerimlilikVeri(v) }}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700 transition">Verileri Yükle</button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 dark:border-gray-700 text-left">
-                      {['Doktor', 'Uzmanlık', 'Toplam', 'Tamamlanan', 'İptal', 'Gelmedi', 'Tamamlanma %'].map(h => (
-                        <th key={h} className="pb-3 font-medium text-gray-500 dark:text-gray-400 pr-4">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {verimlilikVeri.map((d, i) => (
-                      <tr key={i} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td className="py-3 font-medium text-gray-800 dark:text-gray-100 pr-4">Dr. {d.doktorAdi}</td>
-                        <td className="py-3 text-gray-500 dark:text-gray-400 pr-4">{(d as any).UzmanlikAdi ?? d.uzmanlikAdi}</td>
-                        <td className="py-3 text-gray-700 dark:text-gray-300 pr-4">{d.toplamRandevu}</td>
-                        <td className="py-3 text-green-600 dark:text-green-400 font-medium pr-4">{d.tamamlanan}</td>
-                        <td className="py-3 text-red-500 pr-4">{d.iptalEdilen}</td>
-                        <td className="py-3 text-orange-500 pr-4">{d.gelmedi}</td>
-                        <td className="py-3 pr-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-20 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                              <div className="bg-green-500 h-2 rounded-full" style={{ width: `${d.tamamlanmaOrani}%` }} />
-                            </div>
-                            <span className="text-gray-700 dark:text-gray-300 font-medium">%{d.tamamlanmaOrani}</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ÖDEMELER */}
-        {aktifSekme === 'odemeler' && (
-          <div className="space-y-4">
-            {/* Özet */}
-            {odemeOzet && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { icon: '💰', sayi: `₺${odemeOzet.toplamGelir?.toLocaleString('tr-TR') ?? 0}`, etiket: 'Toplam Gelir' },
-                  { icon: '⏳', sayi: `₺${odemeOzet.bekleyenTutar?.toLocaleString('tr-TR') ?? 0}`, etiket: 'Bekleyen Tutar' },
-                  { icon: '✅', sayi: odemeOzet.odenenSayi, etiket: 'Ödenen İşlem' },
-                  { icon: '🔔', sayi: odemeOzet.bekleyenSayi, etiket: 'Bekleyen İşlem' },
+                  { icon: '👥', sayi: istatistik.toplamHasta,   etiket: 'Toplam Hasta',   color: 'from-blue-500 to-blue-600',   ring: 'ring-blue-100 dark:ring-blue-900/30' },
+                  { icon: '👨‍⚕️', sayi: istatistik.toplamDoktor,  etiket: 'Aktif Doktor',   color: 'from-emerald-500 to-emerald-600', ring: 'ring-emerald-100 dark:ring-emerald-900/30' },
+                  { icon: '📅', sayi: istatistik.toplamRandevu, etiket: 'Toplam Randevu', color: 'from-violet-500 to-violet-600', ring: 'ring-violet-100 dark:ring-violet-900/30' },
+                  { icon: '⏳', sayi: istatistik.bekleyen,      etiket: 'Bekleyen',        color: 'from-orange-500 to-orange-600', ring: 'ring-orange-100 dark:ring-orange-900/30' },
                 ].map(k => (
-                  <div key={k.etiket} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm flex items-center gap-3">
-                    <span className="text-2xl">{k.icon}</span>
+                  <div key={k.etiket} className={`bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 shadow-sm ring-1 ${k.ring} flex items-center gap-4`}>
+                    <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${k.color} flex items-center justify-center text-xl shrink-0`}>
+                      {k.icon}
+                    </div>
                     <div>
-                      <p className="text-lg font-bold text-gray-800 dark:text-gray-100">{k.sayi}</p>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs">{k.etiket}</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{k.sayi}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">{k.etiket}</p>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Ödeme Kayıtları</h2>
-                <div className="flex gap-2">
-                  <button onClick={async () => {
-                    const [o, oz] = await Promise.all([api.adminOdemeler(), api.adminOdemeOzet()])
-                    setOdemeler(o); setOdemeOzet(oz)
-                  }} className="text-sm text-blue-600 hover:underline">Yenile</button>
-                  <button onClick={() => setOdemeFormu(f => !f)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition">+ Ekle</button>
+
+              {/* Charts row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                {/* Line chart - 2/3 width */}
+                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Son 30 Günlük Randevu</h2>
+                      <p className="text-xs text-gray-400">Günlük başvuru trendi</p>
+                    </div>
+                    <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full font-medium">
+                      Toplam: {gunlukVeri.reduce((t, g) => t + g.sayi, 0)}
+                    </span>
+                  </div>
+                  {gunlukVeri.length === 0 ? (
+                    <div className="flex items-center justify-center h-48 text-gray-400 text-sm">Veri yükleniyor...</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={gunlukVeri} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="tarih" tick={{ fontSize: 10, fill: '#9ca3af' }} tickFormatter={v => v.slice(5)} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} width={25} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f1f5f9', fontSize: 12 }} formatter={v => [`${v} randevu`, '']} labelFormatter={l => `${l}`} />
+                        <Line type="monotone" dataKey="sayi" stroke="#2563eb" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: '#2563eb' }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                {/* Pie chart - 1/3 width */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <div className="mb-4">
+                    <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Durum Dağılımı</h2>
+                    <p className="text-xs text-gray-400">Tüm randevular</p>
+                  </div>
+                  {durumVeri.length === 0 ? (
+                    <div className="flex items-center justify-center h-48 text-gray-400 text-sm">Yükleniyor...</div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <PieChart>
+                          <Pie data={durumVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
+                            {durumVeri.map((entry, i) => (
+                              <Cell key={i} fill={DURUM_RENKLERI[entry.isim] ?? PASTA_RENKLERI[i]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={v => [`${v}`, '']} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-1.5 mt-2">
+                        {durumVeri.map((d, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: DURUM_RENKLERI[d.isim] ?? PASTA_RENKLERI[i] }} />
+                              <span className="text-gray-600 dark:text-gray-300">{d.isim}</span>
+                            </div>
+                            <span className="font-semibold text-gray-800 dark:text-gray-100">{d.sayi}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-              {odemeFormu && (
-                <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input placeholder="Randevu ID" type="number" value={yeniOdeme.randevuId} onChange={e => setYeniOdeme(f => ({ ...f, randevuId: e.target.value }))} className={inputCls} />
-                  <input placeholder="Tutar (₺)" type="number" value={yeniOdeme.tutar} onChange={e => setYeniOdeme(f => ({ ...f, tutar: e.target.value }))} className={inputCls} />
-                  <select value={yeniOdeme.odemeYontemi} onChange={e => setYeniOdeme(f => ({ ...f, odemeYontemi: e.target.value }))} className={inputCls}>
-                    {['Nakit', 'Kredi Kartı', 'Sigorta', 'SGK'].map(y => <option key={y}>{y}</option>)}
+
+              {/* Bottom row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                {/* Son randevular */}
+                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Son Randevular</h2>
+                    <button onClick={() => navGit('randevular')} className="text-xs text-blue-600 hover:underline">Tümünü gör →</button>
+                  </div>
+                  <div className="space-y-2">
+                    {randevular.slice(0, 5).map(r => (
+                      <div key={r.RandevuID} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm shrink-0">👤</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{r.HastaAdi}</p>
+                          <p className="text-xs text-gray-400 truncate">Dr. {r.DoktorAdi} · {r.RandevuTarihi.split('T')[0]}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${durumRenk[r.Durum] ?? ''}`}>{r.Durum}</span>
+                      </div>
+                    ))}
+                    {randevular.length === 0 && <p className="text-center text-gray-400 text-sm py-4">Randevu bulunamadı</p>}
+                  </div>
+                </div>
+
+                {/* Özet */}
+                <div className="flex flex-col gap-4">
+                  {ozetIst && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-5 flex-1">
+                      <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">En Meşgul Doktorlar</h2>
+                      <div className="space-y-2">
+                        {ozetIst.enMesgulDoktorlar.slice(0, 4).map((d, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <div className="min-w-0">
+                              <p className="text-gray-700 dark:text-gray-200 truncate text-xs font-medium">{d.doktorAdi}</p>
+                              <p className="text-gray-400 text-xs truncate">{d.uzmanlikAdi}</p>
+                            </div>
+                            <span className="text-blue-600 font-bold text-sm shrink-0 ml-2">{d.randevuSayisi}</span>
+                          </div>
+                        ))}
+                        {(!ozetIst.enMesgulDoktorlar || ozetIst.enMesgulDoktorlar.length === 0) && (
+                          <p className="text-gray-400 text-xs text-center py-2">Veri yok</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {odemeOzet && (
+                    <div className="bg-linear-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-sm p-4 sm:p-5">
+                      <p className="text-emerald-100 text-xs mb-1">Toplam Gelir</p>
+                      <p className="text-white text-2xl font-bold">₺{Number(odemeOzet.toplamGelir ?? 0).toLocaleString('tr-TR')}</p>
+                      <p className="text-emerald-100 text-xs mt-2">{odemeOzet.odenenSayi} ödeme tamamlandı · {odemeOzet.bekleyenSayi} bekliyor</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══ RANDEVULAR ══ */}
+          {aktifSekme === 'randevular' && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+              <div className="flex flex-col gap-3 mb-6">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text" placeholder="Hasta veya doktor ara..." value={aramaMetni}
+                    onChange={e => setAramaMetni(e.target.value)}
+                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 placeholder-gray-400"
+                  />
+                  <select value={durumFiltre} onChange={e => setDurumFiltre(e.target.value)}
+                    className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    <option>Tümü</option>
+                    <option>Beklemede</option>
+                    <option>Onaylandı</option>
+                    <option>Tamamlandı</option>
+                    <option>İptal</option>
                   </select>
-                  <input placeholder="Not (isteğe bağlı)" value={yeniOdeme.notlar} onChange={e => setYeniOdeme(f => ({ ...f, notlar: e.target.value }))} className={inputCls} />
-                  <button onClick={async () => {
-                    if (!yeniOdeme.randevuId || !yeniOdeme.tutar) return
-                    await api.adminOdemeEkle({ randevuId: parseInt(yeniOdeme.randevuId), tutar: parseFloat(yeniOdeme.tutar), odemeYontemi: yeniOdeme.odemeYontemi, notlar: yeniOdeme.notlar || undefined })
-                    setOdemeFormu(false)
-                    setYeniOdeme({ randevuId: '', tutar: '', odemeYontemi: 'Nakit', notlar: '' })
-                    const [o, oz] = await Promise.all([api.adminOdemeler(), api.adminOdemeOzet()])
-                    setOdemeler(o); setOdemeOzet(oz)
-                  }} className="sm:col-span-2 bg-green-600 text-white py-2 rounded-lg text-sm hover:bg-green-700 transition">Kaydet</button>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 items-center">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Tarih:</span>
+                    <input type="date" value={tarihBas} onChange={e => setTarihBas(e.target.value)}
+                      className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
+                    <span className="text-xs text-gray-400 shrink-0">—</span>
+                    <input type="date" value={tarihBit} onChange={e => setTarihBit(e.target.value)}
+                      className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1" />
+                  </div>
+                  {(aramaMetni || durumFiltre !== 'Tümü' || tarihBas || tarihBit) && (
+                    <button onClick={() => { setAramaMetni(''); setDurumFiltre('Tümü'); setTarihBas(''); setTarihBit('') }}
+                      className="text-xs text-gray-400 hover:text-red-500 transition shrink-0">
+                      Filtreleri Temizle ✕
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      setCsvYukleniyor(true)
+                      try { await api.adminCsvIndir(durumFiltre, tarihBas, tarihBit) }
+                      catch { alert('CSV indirilemedi') }
+                      finally { setCsvYukleniyor(false) }
+                    }}
+                    disabled={csvYukleniyor}
+                    className="text-xs bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 shrink-0"
+                  >
+                    {csvYukleniyor ? 'İndiriliyor...' : '⬇ CSV İndir'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-400 mb-3">{filtreliRandevular.length} randevu listeleniyor</div>
+
+              <div className="flex flex-col gap-2">
+                {filtreliRandevular.length === 0 && <p className="text-center text-gray-400 py-8">Randevu bulunamadı.</p>}
+                {filtreliRandevular.map((r) => (
+                  <div key={r.RandevuID} className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-sm shrink-0">👤</div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{r.HastaAdi}</p>
+                          <p className="text-gray-500 dark:text-gray-400 text-xs truncate">Dr. {r.DoktorAdi} · {r.UzmanlikAdi}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${durumRenk[r.Durum] ?? ''}`}>{r.Durum}</span>
+                    </div>
+                    <div className="flex items-center justify-between pl-11">
+                      <p className="text-gray-400 text-xs">{r.RandevuTarihi.split('T')[0]} · {String(r.RandevuSaati).substring(0, 5)}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {r.Durum === 'Beklemede' && (
+                          <button onClick={() => randevuDurum(r.RandevuID, 'Onaylandı')} className="text-xs bg-emerald-500 text-white px-3 py-1 rounded-lg hover:bg-emerald-600 transition">Onayla</button>
+                        )}
+                        {(r.Durum === 'Beklemede' || r.Durum === 'Onaylandı') && (
+                          <button onClick={() => randevuDurum(r.RandevuID, 'İptal')} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1 rounded-lg hover:bg-red-200 transition">İptal Et</button>
+                        )}
+                        {r.Durum === 'İptal' && (
+                          <button onClick={() => randevuSil(r.RandevuID)} className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 px-3 py-1 rounded-lg transition">Sil</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ══ DOKTORLAR ══ */}
+          {aktifSekme === 'doktorlar' && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Doktor Listesi</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{doktorlar.length} doktor kayıtlı</p>
+                </div>
+                <button
+                  onClick={() => { setDoktorFormu(!doktorFormu); setYeniDoktor(bos); setFormHata('') }}
+                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition font-medium"
+                >
+                  + Yeni Doktor
+                </button>
+              </div>
+
+              {doktorFormu && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 mb-4">
+                  {formHata && <p className="text-red-500 text-sm mb-3">{formHata}</p>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Ad *</label><input type="text" placeholder="Adı" value={yeniDoktor.ad} onChange={e => setYeniDoktor({ ...yeniDoktor, ad: e.target.value })} className={inp} /></div>
+                    <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Soyad *</label><input type="text" placeholder="Soyadı" value={yeniDoktor.soyad} onChange={e => setYeniDoktor({ ...yeniDoktor, soyad: e.target.value })} className={inp} /></div>
+                    <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">E-posta *</label><input type="email" placeholder="doktor@hastane.com" value={yeniDoktor.email} onChange={e => setYeniDoktor({ ...yeniDoktor, email: e.target.value })} className={inp} /></div>
+                    <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Geçici Şifre *</label><input type="password" placeholder="••••••••" value={yeniDoktor.sifre} onChange={e => setYeniDoktor({ ...yeniDoktor, sifre: e.target.value })} className={inp} /></div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Uzmanlık *</label>
+                      <select value={yeniDoktor.uzmanlikAdi} onChange={e => setYeniDoktor({ ...yeniDoktor, uzmanlikAdi: e.target.value })} className={inp}>
+                        <option value="">Seçiniz</option>
+                        <option>Kardiyoloji</option><option>Ortopedi</option><option>Nöroloji</option>
+                        <option>Göz Hastalıkları</option><option>Dahiliye</option><option>Psikiyatri</option>
+                        <option>Çocuk Sağlığı</option><option>Dermatoloji</option><option>Genel Cerrahi</option>
+                        <option>Kulak Burun Boğaz</option><option>Radyoloji</option><option>Üroloji</option>
+                      </select>
+                    </div>
+                    <div><label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Telefon</label><input type="tel" placeholder="05XX XXX XX XX" value={yeniDoktor.telefon} onChange={e => setYeniDoktor({ ...yeniDoktor, telefon: e.target.value })} className={inp} /></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={doktorEkle} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition">Ekle</button>
+                    <button onClick={() => { setDoktorFormu(false); setYeniDoktor(bos); setFormHata('') }} className="text-gray-400 hover:text-gray-600 px-4 py-2 text-sm">Vazgeç</button>
+                  </div>
                 </div>
               )}
-              {odemeler.length === 0 ? (
+
+              <div className="flex flex-col gap-2">
+                {doktorlar.map((d) => (
+                  <div key={d.DoktorID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-lg shrink-0">👨‍⚕️</div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dr. {d.Ad} {d.Soyad}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              d.Durum === 'Aktif'   ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+                              d.Durum === 'İzinli'  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' :
+                                                      'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                            }`}>{d.Durum}</span>
+                          </div>
+                          <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{d.UzmanlikAdi} · {d.Email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setDurumFormu(
+                            durumFormu.doktorId === d.DoktorID
+                              ? { doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' }
+                              : { doktorId: d.DoktorID, durum: d.Durum, izinBaslangic: '', izinBitis: '' }
+                          )}
+                          className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition"
+                        >
+                          Durum
+                        </button>
+                        <button onClick={() => doktorSil(d.DoktorID)} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">Kaldır</button>
+                      </div>
+                    </div>
+
+                    {durumFormu.doktorId === d.DoktorID && (
+                      <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 p-4">
+                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">Durum Güncelle — Dr. {d.Ad} {d.Soyad}</p>
+                        <div className="flex flex-wrap gap-3 items-end">
+                          <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Durum</label>
+                            <select value={durumFormu.durum} onChange={e => setDurumFormu({ ...durumFormu, durum: e.target.value })} className={inp + ' w-36'}>
+                              <option value="Aktif">Aktif</option>
+                              <option value="İzinli">İzinli</option>
+                              <option value="Ayrıldı">Ayrıldı</option>
+                            </select>
+                          </div>
+                          {durumFormu.durum === 'İzinli' && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">İzin Başlangıç</label>
+                                <input type="date" value={durumFormu.izinBaslangic} onChange={e => setDurumFormu({ ...durumFormu, izinBaslangic: e.target.value })} className={inp + ' w-40'} />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">İzin Bitiş</label>
+                                <input type="date" value={durumFormu.izinBitis} onChange={e => setDurumFormu({ ...durumFormu, izinBitis: e.target.value })} className={inp + ' w-40'} />
+                              </div>
+                            </>
+                          )}
+                          <div className="flex gap-2">
+                            <button onClick={doktorDurumGuncelle} className="text-xs bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium">Kaydet</button>
+                            <button onClick={() => setDurumFormu({ doktorId: null, durum: 'Aktif', izinBaslangic: '', izinBitis: '' })} className="text-xs text-gray-400 hover:text-gray-600 px-3 py-2">Vazgeç</button>
+                          </div>
+                        </div>
+                        {(durumFormu.durum === 'Ayrıldı' || (durumFormu.durum === 'İzinli' && !durumFormu.izinBaslangic)) && (
+                          <p className="text-xs text-red-500 mt-2">
+                            ⚠️ {durumFormu.durum === 'Ayrıldı' ? 'Doktorun tüm gelecek randevuları iptal edilecek.' : 'Tarih girilmezse anlık izin olarak işlenir — tüm randevular iptal edilir.'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ══ HASTALAR ══ */}
+          {aktifSekme === 'hastalar' && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Hasta Listesi</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{filtreliHastalar.length} hasta</p>
+                </div>
+                <input
+                  type="text" placeholder="İsim veya e-posta ara..." value={hastaArama}
+                  onChange={e => setHastaArama(e.target.value)}
+                  className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full sm:w-64 placeholder-gray-400"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                {filtreliHastalar.length === 0 && <p className="text-center text-gray-400 py-8">Hasta bulunamadı.</p>}
+                {filtreliHastalar.map((h) => (
+                  <div key={h.HastaID} className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <button
+                      onClick={() => setAcikHastaId(acikHastaId === h.HastaID ? null : h.HastaID)}
+                      className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-sm shrink-0">👤</div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{h.Ad} {h.Soyad}</p>
+                          <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{h.Email} · {h.ToplamRandevu} randevu</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {h.KanGrubu && <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-medium">{h.KanGrubu}</span>}
+                        <span className="text-gray-400 text-xs">{acikHastaId === h.HastaID ? '▲' : '▼'}</span>
+                      </div>
+                    </button>
+                    {acikHastaId === h.HastaID && (
+                      <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 pt-4 text-sm">
+                          <div><p className="text-xs text-gray-400 mb-0.5">TC Kimlik</p><p className="text-gray-700 dark:text-gray-200">{h.TCKimlik ?? '—'}</p></div>
+                          <div><p className="text-xs text-gray-400 mb-0.5">Doğum Tarihi</p><p className="text-gray-700 dark:text-gray-200">{h.DogumTarihi ? h.DogumTarihi.substring(0, 10) : '—'}</p></div>
+                          <div><p className="text-xs text-gray-400 mb-0.5">Cinsiyet</p><p className="text-gray-700 dark:text-gray-200">{h.Cinsiyet ?? '—'}</p></div>
+                          <div><p className="text-xs text-gray-400 mb-0.5">Telefon</p><p className="text-gray-700 dark:text-gray-200">{h.Telefon ?? '—'}</p></div>
+                          <div><p className="text-xs text-gray-400 mb-0.5">Kan Grubu</p><p className="text-gray-700 dark:text-gray-200">{h.KanGrubu ?? '—'}</p></div>
+                          <div><p className="text-xs text-gray-400 mb-0.5">Adres</p><p className="text-gray-700 dark:text-gray-200">{h.Adres ?? '—'}</p></div>
+                          {(h.KronikHastaliklar || h.Alerjiler || h.SurekliIlaclar) && (
+                            <div className="col-span-2 sm:col-span-3 border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
+                              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Sağlık Bilgileri</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div><p className="text-xs text-gray-400 mb-0.5">Kronik Hastalıklar</p><p className="text-gray-700 dark:text-gray-200">{h.KronikHastaliklar ?? '—'}</p></div>
+                                <div><p className="text-xs text-gray-400 mb-0.5">Alerjiler</p><p className="text-gray-700 dark:text-gray-200">{h.Alerjiler ?? '—'}</p></div>
+                                <div><p className="text-xs text-gray-400 mb-0.5">Sürekli İlaçlar</p><p className="text-gray-700 dark:text-gray-200">{h.SurekliIlaclar ?? '—'}</p></div>
+                              </div>
+                            </div>
+                          )}
+                          {(h.AcilKisiAd || h.AcilKisiTelefon) && (
+                            <div className="col-span-2 sm:col-span-3 border-t border-gray-200 dark:border-gray-600 pt-3 mt-1">
+                              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Acil İletişim</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div><p className="text-xs text-gray-400 mb-0.5">Kişi</p><p className="text-gray-700 dark:text-gray-200">{h.AcilKisiAd ?? '—'}</p></div>
+                                <div><p className="text-xs text-gray-400 mb-0.5">Telefon</p><p className="text-gray-700 dark:text-gray-200">{h.AcilKisiTelefon ?? '—'}</p></div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ══ İSTATİSTİKLER ══ */}
+          {aktifSekme === 'istatistikler' && (
+            <div className="flex flex-col gap-6">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">Son 30 Günlük Randevu</h2>
+                <p className="text-gray-400 text-xs mb-4">Her güne ait toplam randevu sayısı</p>
+                {gunlukVeri.length === 0 ? (
+                  <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={gunlukVeri} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="tarih" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => v.slice(5)} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} width={30} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#f9fafb' }} formatter={v => [`${v} randevu`, '']} labelFormatter={l => `Tarih: ${l}`} />
+                      <Line type="monotone" dataKey="sayi" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4, fill: '#2563eb' }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                  <div className="text-center"><p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.reduce((t, g) => t + g.sayi, 0)}</p><p className="text-xs text-gray-400 mt-1">30 gün toplam</p></div>
+                  <div className="text-center"><p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.length > 0 ? Math.max(...gunlukVeri.map(g => g.sayi)) : 0}</p><p className="text-xs text-gray-400 mt-1">En yoğun gün</p></div>
+                  <div className="text-center"><p className="text-xl font-bold text-gray-800 dark:text-gray-100">{gunlukVeri.length > 0 ? (gunlukVeri.reduce((t, g) => t + g.sayi, 0) / gunlukVeri.length).toFixed(1) : 0}</p><p className="text-xs text-gray-400 mt-1">Günlük ortalama</p></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">Uzmanlığa Göre Randevu</h2>
+                  <p className="text-gray-400 text-xs mb-4">Hangi bölüme ne kadar başvuru var</p>
+                  {uzmanlikVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie data={uzmanlikVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} %${((percent ?? 0) * 100).toFixed(0)}`} labelLine={false}>
+                          {uzmanlikVeri.map((_, i) => <Cell key={i} fill={PASTA_RENKLERI[i % PASTA_RENKLERI.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={v => [`${v} randevu`, '']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">Randevu Durum Dağılımı</h2>
+                  <p className="text-gray-400 text-xs mb-4">İptal oranı yüksekse dikkat</p>
+                  {durumVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie data={durumVeri} dataKey="sayi" nameKey="isim" cx="50%" cy="50%" innerRadius={55} outerRadius={90} label={({ name, percent }) => `${name} %${((percent ?? 0) * 100).toFixed(0)}`} labelLine={false}>
+                          {durumVeri.map((entry, i) => <Cell key={i} fill={DURUM_RENKLERI[entry.isim] ?? PASTA_RENKLERI[i]} />)}
+                        </Pie>
+                        <Tooltip formatter={v => [`${v} randevu`, '']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                  {iptalListesi.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                      <p className="text-xs font-semibold text-red-500 mb-2">❌ Son 30 Günde İptal Edilenler</p>
+                      <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                        {iptalListesi.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
+                            <div>
+                              <p className="font-medium text-gray-800 dark:text-gray-100">{r.hastaAdi}</p>
+                              <p className="text-gray-400">Dr. {r.doktorAdi} · {r.uzmanlikAdi}</p>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 shrink-0 ml-2">{r.tarih}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">En Çok Randevu Alan Doktorlar</h2>
+                  <p className="text-gray-400 text-xs mb-4">İlk 5 doktor</p>
+                  {doktorVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={doktorVeri} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                        <YAxis type="category" dataKey="isim" tick={{ fontSize: 11, fill: '#9ca3af' }} width={100} />
+                        <Tooltip formatter={v => [`${v} randevu`, '']} />
+                        <Bar dataKey="sayi" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                  <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">Saate Göre Yoğunluk</h2>
+                  <p className="text-gray-400 text-xs mb-4">Hangi saatler dolu taşıyor</p>
+                  {saatVeri.length === 0 ? <p className="text-center text-gray-400 py-10">Veri bulunamadı.</p> : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={saatVeri} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="saat" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} width={30} />
+                        <Tooltip formatter={v => [`${v} randevu`, '']} />
+                        <Bar dataKey="sayi" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {ozetIst && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                    <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">En Çok İptal Eden Hastalar</h2>
+                    <p className="text-gray-400 text-xs mb-4">İlk 5 hasta</p>
+                    {ozetIst.enCokIptalEdenHastalar.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">Veri yok</p> : (
+                      <div className="flex flex-col gap-2">
+                        {ozetIst.enCokIptalEdenHastalar.map((h, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700 dark:text-gray-200 truncate">{h.hastaAdi}</span>
+                            <span className="text-red-500 font-semibold shrink-0 ml-2">{h.iptalSayisi} iptal</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                    <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">En Meşgul Doktorlar</h2>
+                    <p className="text-gray-400 text-xs mb-4">Aktif randevu sayısına göre</p>
+                    {ozetIst.enMesgulDoktorlar.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">Veri yok</p> : (
+                      <div className="flex flex-col gap-2">
+                        {ozetIst.enMesgulDoktorlar.map((d, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <div className="min-w-0"><p className="text-gray-700 dark:text-gray-200 truncate">{d.doktorAdi}</p><p className="text-gray-400 text-xs truncate">{d.uzmanlikAdi}</p></div>
+                            <span className="text-blue-500 font-semibold shrink-0 ml-2">{d.randevuSayisi}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                    <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">En Yoğun Uzmanlıklar</h2>
+                    <p className="text-gray-400 text-xs mb-4">İptal hariç randevu sayısı</p>
+                    {ozetIst.enYogunUzmanliklar.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">Veri yok</p> : (
+                      <div className="flex flex-col gap-2">
+                        {ozetIst.enYogunUzmanliklar.map((u, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700 dark:text-gray-200 truncate">{u.UzmanlikAdi}</span>
+                            <span className="text-emerald-600 font-semibold shrink-0 ml-2">{u.randevuSayisi}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══ VERİMLİLİK ══ */}
+          {aktifSekme === 'verimlilik' && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Doktor Verimlilik Raporu</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Tamamlanma oranlarına göre</p>
+                </div>
+                <button onClick={async () => setVerimlilikVeri(await api.adminVerimlilik())} className="text-sm text-blue-600 hover:underline">Yenile</button>
+              </div>
+              {verimlilikVeri.length === 0 ? (
                 <div className="text-center py-10">
-                  <p className="text-gray-400 text-sm mb-3">Ödeme kayıtlarını yüklemek için butona tıklayın.</p>
-                  <button onClick={async () => {
-                    const [o, oz] = await Promise.all([api.adminOdemeler(), api.adminOdemeOzet()])
-                    setOdemeler(o); setOdemeOzet(oz)
-                  }} className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700 transition">Verileri Yükle</button>
+                  <p className="text-gray-400 text-sm mb-3">Verimlilik verilerini yüklemek için butona tıklayın.</p>
+                  <button onClick={async () => setVerimlilikVeri(await api.adminVerimlilik())} className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700 transition">Verileri Yükle</button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 dark:border-gray-700 text-left">
-                        {['Hasta', 'Doktor', 'Tarih', 'Tutar', 'Yöntem', 'Durum', 'İşlem'].map(h => (
-                          <th key={h} className="pb-3 font-medium text-gray-500 dark:text-gray-400 pr-3">{h}</th>
+                        {['Doktor', 'Uzmanlık', 'Toplam', 'Tamamlanan', 'İptal', 'Gelmedi', 'Tamamlanma %'].map(h => (
+                          <th key={h} className="pb-3 font-medium text-gray-500 dark:text-gray-400 pr-4">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {odemeler.map(o => (
-                        <tr key={o.OdemeID} className="border-b border-gray-50 dark:border-gray-700/50">
-                          <td className="py-3 text-gray-800 dark:text-gray-100 pr-3">{o.HastaAdi}</td>
-                          <td className="py-3 text-gray-600 dark:text-gray-300 pr-3">Dr. {o.DoktorAdi}</td>
-                          <td className="py-3 text-gray-500 pr-3">{o.RandevuTarihi}</td>
-                          <td className="py-3 font-medium text-gray-800 dark:text-gray-100 pr-3">₺{Number(o.Tutar).toLocaleString('tr-TR')}</td>
-                          <td className="py-3 text-gray-500 pr-3">{o.OdemeYontemi}</td>
-                          <td className="py-3 pr-3">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.Durum === 'Ödendi' ? 'bg-green-100 text-green-700' : o.Durum === 'İptal' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{o.Durum}</span>
-                          </td>
-                          <td className="py-3">
-                            {o.Durum === 'Bekliyor' && (
-                              <button onClick={async () => {
-                                await api.adminOdemeDurumGuncelle(o.OdemeID, 'Ödendi')
-                                setOdemeler(prev => prev.map(p => p.OdemeID === o.OdemeID ? { ...p, Durum: 'Ödendi' } : p))
-                              }} className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">Ödendi</button>
-                            )}
+                      {verimlilikVeri.map((d, i) => (
+                        <tr key={i} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                          <td className="py-3 font-medium text-gray-800 dark:text-gray-100 pr-4">Dr. {d.doktorAdi}</td>
+                          <td className="py-3 text-gray-500 dark:text-gray-400 pr-4">{(d as any).UzmanlikAdi ?? d.uzmanlikAdi}</td>
+                          <td className="py-3 text-gray-700 dark:text-gray-300 pr-4">{d.toplamRandevu}</td>
+                          <td className="py-3 text-emerald-600 dark:text-emerald-400 font-medium pr-4">{d.tamamlanan}</td>
+                          <td className="py-3 text-red-500 pr-4">{d.iptalEdilen}</td>
+                          <td className="py-3 text-orange-500 pr-4">{d.gelmedi}</td>
+                          <td className="py-3 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+                                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${d.tamamlanmaOrani}%` }} />
+                              </div>
+                              <span className="text-gray-700 dark:text-gray-300 font-medium">%{d.tamamlanmaOrani}</span>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -987,50 +987,187 @@ export default function AdminPaneli() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* TOPLU DUYURU */}
-        {aktifSekme === 'duyuru' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 max-w-2xl">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">📢 Tüm Hastalara Duyuru Gönder</h2>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Sistem bildirimi + e-posta olarak tüm hastalara ulaşır.</p>
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Başlık</label>
-                <input value={duyuruFormu.baslik} onChange={e => setDuyuruFormu(f => ({ ...f, baslik: e.target.value }))}
-                  placeholder="Örn: Bakım Duyurusu" className={inputCls} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Mesaj</label>
-                <textarea rows={5} value={duyuruFormu.mesaj} onChange={e => setDuyuruFormu(f => ({ ...f, mesaj: e.target.value }))}
-                  placeholder="Duyuru mesajınızı buraya yazın..." maxLength={500}
-                  className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
-                <p className="text-xs text-gray-400 text-right mt-1">{duyuruFormu.mesaj.length}/500</p>
-              </div>
-              {duyuruSonuc && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-700 dark:text-green-400 rounded-lg px-4 py-3 text-sm">
-                  ✅ {duyuruSonuc}
+          {/* ══ ÖDEMELER ══ */}
+          {aktifSekme === 'odemeler' && (
+            <div className="space-y-4">
+              {odemeOzet && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { icon: '💰', sayi: `₺${Number(odemeOzet.toplamGelir ?? 0).toLocaleString('tr-TR')}`, etiket: 'Toplam Gelir', color: 'bg-emerald-500' },
+                    { icon: '⏳', sayi: `₺${Number(odemeOzet.bekleyenTutar ?? 0).toLocaleString('tr-TR')}`, etiket: 'Bekleyen Tutar', color: 'bg-orange-500' },
+                    { icon: '✅', sayi: odemeOzet.odenenSayi, etiket: 'Ödenen İşlem', color: 'bg-blue-500' },
+                    { icon: '🔔', sayi: odemeOzet.bekleyenSayi, etiket: 'Bekleyen İşlem', color: 'bg-violet-500' },
+                  ].map(k => (
+                    <div key={k.etiket} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl ${k.color} flex items-center justify-center text-lg shrink-0`}>{k.icon}</div>
+                      <div><p className="text-lg font-bold text-gray-800 dark:text-gray-100">{k.sayi}</p><p className="text-gray-500 dark:text-gray-400 text-xs">{k.etiket}</p></div>
+                    </div>
+                  ))}
                 </div>
               )}
-              <button
-                disabled={duyuruGonderiyor || !duyuruFormu.baslik || !duyuruFormu.mesaj}
-                onClick={async () => {
-                  setDuyuruGonderiyor(true)
-                  setDuyuruSonuc('')
-                  try {
-                    const r = await api.adminTopluBildirim(duyuruFormu.baslik, duyuruFormu.mesaj)
-                    setDuyuruSonuc(r.mesaj)
-                    setDuyuruFormu({ baslik: '', mesaj: '' })
-                  } catch (err: unknown) { alert(err instanceof Error ? err.message : 'Hata') }
-                  finally { setDuyuruGonderiyor(false) }
-                }}
-                className="bg-blue-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                {duyuruGonderiyor ? 'Gönderiliyor...' : 'Duyuruyu Gönder'}
-              </button>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Ödeme Kayıtları</h2>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { const [o, oz] = await Promise.all([api.adminOdemeler(), api.adminOdemeOzet()]); setOdemeler(o); setOdemeOzet(oz) }} className="text-sm text-blue-600 hover:underline">Yenile</button>
+                    <button onClick={() => setOdemeFormu(f => !f)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition">+ Ekle</button>
+                  </div>
+                </div>
+                {odemeFormu && (
+                  <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input placeholder="Randevu ID" type="number" value={yeniOdeme.randevuId} onChange={e => setYeniOdeme(f => ({ ...f, randevuId: e.target.value }))} className={inp} />
+                    <input placeholder="Tutar (₺)" type="number" value={yeniOdeme.tutar} onChange={e => setYeniOdeme(f => ({ ...f, tutar: e.target.value }))} className={inp} />
+                    <select value={yeniOdeme.odemeYontemi} onChange={e => setYeniOdeme(f => ({ ...f, odemeYontemi: e.target.value }))} className={inp}>
+                      {['Nakit', 'Kredi Kartı', 'Sigorta', 'SGK'].map(y => <option key={y}>{y}</option>)}
+                    </select>
+                    <input placeholder="Not (isteğe bağlı)" value={yeniOdeme.notlar} onChange={e => setYeniOdeme(f => ({ ...f, notlar: e.target.value }))} className={inp} />
+                    <button onClick={async () => {
+                      if (!yeniOdeme.randevuId || !yeniOdeme.tutar) return
+                      await api.adminOdemeEkle({ randevuId: parseInt(yeniOdeme.randevuId), tutar: parseFloat(yeniOdeme.tutar), odemeYontemi: yeniOdeme.odemeYontemi, notlar: yeniOdeme.notlar || undefined })
+                      setOdemeFormu(false); setYeniOdeme({ randevuId: '', tutar: '', odemeYontemi: 'Nakit', notlar: '' })
+                      const [o, oz] = await Promise.all([api.adminOdemeler(), api.adminOdemeOzet()]); setOdemeler(o); setOdemeOzet(oz)
+                    }} className="sm:col-span-2 bg-emerald-600 text-white py-2 rounded-lg text-sm hover:bg-emerald-700 transition">Kaydet</button>
+                  </div>
+                )}
+                {odemeler.length === 0 ? (
+                  <div className="text-center py-10">
+                    <p className="text-gray-400 text-sm mb-3">Ödeme kayıtlarını yüklemek için butona tıklayın.</p>
+                    <button onClick={async () => { const [o, oz] = await Promise.all([api.adminOdemeler(), api.adminOdemeOzet()]); setOdemeler(o); setOdemeOzet(oz) }} className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700 transition">Verileri Yükle</button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 dark:border-gray-700 text-left">
+                          {['Hasta', 'Doktor', 'Tarih', 'Tutar', 'Yöntem', 'Durum', 'İşlem'].map(h => (
+                            <th key={h} className="pb-3 font-medium text-gray-500 dark:text-gray-400 pr-3">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {odemeler.map(o => (
+                          <tr key={o.OdemeID} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td className="py-3 text-gray-800 dark:text-gray-100 pr-3">{o.HastaAdi}</td>
+                            <td className="py-3 text-gray-600 dark:text-gray-300 pr-3">Dr. {o.DoktorAdi}</td>
+                            <td className="py-3 text-gray-500 pr-3">{o.RandevuTarihi}</td>
+                            <td className="py-3 font-medium text-gray-800 dark:text-gray-100 pr-3">₺{Number(o.Tutar).toLocaleString('tr-TR')}</td>
+                            <td className="py-3 text-gray-500 pr-3">{o.OdemeYontemi}</td>
+                            <td className="py-3 pr-3">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.Durum === 'Ödendi' ? 'bg-green-100 text-green-700' : o.Durum === 'İptal' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{o.Durum}</span>
+                            </td>
+                            <td className="py-3">
+                              {o.Durum === 'Bekliyor' && (
+                                <button onClick={async () => {
+                                  await api.adminOdemeDurumGuncelle(o.OdemeID, 'Ödendi')
+                                  setOdemeler(prev => prev.map(p => p.OdemeID === o.OdemeID ? { ...p, Durum: 'Ödendi' } : p))
+                                }} className="text-xs bg-emerald-500 text-white px-2 py-1 rounded hover:bg-emerald-600">Ödendi</button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* ══ DUYURU ══ */}
+          {aktifSekme === 'duyuru' && (
+            <div className="max-w-2xl">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6">
+                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Tüm Hastalara Duyuru Gönder</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Sistem bildirimi olarak tüm hastalara ulaşır.</p>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Başlık</label>
+                    <input value={duyuruFormu.baslik} onChange={e => setDuyuruFormu(f => ({ ...f, baslik: e.target.value }))} placeholder="Örn: Bakım Duyurusu" className={inp} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Mesaj</label>
+                    <textarea rows={5} value={duyuruFormu.mesaj} onChange={e => setDuyuruFormu(f => ({ ...f, mesaj: e.target.value }))}
+                      placeholder="Duyuru mesajınızı buraya yazın..." maxLength={500}
+                      className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
+                    <p className="text-xs text-gray-400 text-right mt-1">{duyuruFormu.mesaj.length}/500</p>
+                  </div>
+                  {duyuruSonuc && (
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 rounded-lg px-4 py-3 text-sm">
+                      ✅ {duyuruSonuc}
+                    </div>
+                  )}
+                  <button
+                    disabled={duyuruGonderiyor || !duyuruFormu.baslik || !duyuruFormu.mesaj}
+                    onClick={async () => {
+                      setDuyuruGonderiyor(true); setDuyuruSonuc('')
+                      try {
+                        const r = await api.adminTopluBildirim(duyuruFormu.baslik, duyuruFormu.mesaj)
+                        setDuyuruSonuc(r.mesaj); setDuyuruFormu({ baslik: '', mesaj: '' })
+                      } catch (err: unknown) { alert(err instanceof Error ? err.message : 'Hata') }
+                      finally { setDuyuruGonderiyor(false) }
+                    }}
+                    className="bg-blue-600 text-white py-2.5 rounded-xl font-medium text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {duyuruGonderiyor ? 'Gönderiliyor...' : 'Duyuruyu Gönder'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══ YÖNETİCİLER ══ */}
+          {aktifSekme === 'yoneticiler' && (
+            <div className="max-w-2xl">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Yönetici Listesi</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">{yoneticiler.length} yönetici</p>
+                  </div>
+                  <button onClick={() => setYoneticiFormu(f => !f)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-700 transition">+ Yeni Yönetici</button>
+                </div>
+                {yoneticiFormu && (
+                  <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input placeholder="Ad" value={yeniYonetici.ad} onChange={e => setYeniYonetici(f => ({ ...f, ad: e.target.value }))} className={inp} />
+                    <input placeholder="Soyad" value={yeniYonetici.soyad} onChange={e => setYeniYonetici(f => ({ ...f, soyad: e.target.value }))} className={inp} />
+                    <input placeholder="Email" value={yeniYonetici.email} onChange={e => setYeniYonetici(f => ({ ...f, email: e.target.value }))} className={inp} />
+                    <input placeholder="Şifre (min. 6 karakter)" type="password" value={yeniYonetici.sifre} onChange={e => setYeniYonetici(f => ({ ...f, sifre: e.target.value }))} className={inp} />
+                    {yoneticiHata && <p className="sm:col-span-2 text-red-500 text-xs">{yoneticiHata}</p>}
+                    <button onClick={async () => {
+                      setYoneticiHata('')
+                      try {
+                        await api.adminYoneticiEkle(yeniYonetici)
+                        setYoneticiFormu(false); setYeniYonetici({ ad: '', soyad: '', email: '', sifre: '' })
+                        setYoneticiler(await api.adminYoneticiler())
+                      } catch (err: unknown) { setYoneticiHata(err instanceof Error ? err.message : 'Hata') }
+                    }} className="sm:col-span-2 bg-emerald-600 text-white py-2 rounded-lg text-sm hover:bg-emerald-700 transition">Ekle</button>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  {yoneticiler.map((y) => (
+                    <div key={y.KullaniciID} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm">⚙️</div>
+                        <div>
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{y.Ad} {y.Soyad}</p>
+                          <p className="text-gray-500 dark:text-gray-400 text-xs">{y.Email}</p>
+                        </div>
+                      </div>
+                      <button onClick={async () => {
+                        if (!confirm(`${y.Ad} ${y.Soyad} yöneticisini silmek istediğinizden emin misiniz?`)) return
+                        try { await api.adminYoneticiSil(y.KullaniciID); setYoneticiler(prev => prev.filter(y2 => y2.KullaniciID !== y.KullaniciID)) }
+                        catch (err: unknown) { alert(err instanceof Error ? err.message : 'Silinemedi') }
+                      }} className="text-xs text-red-500 hover:text-red-700 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition">Sil</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </main>
       </div>
     </div>
   )
