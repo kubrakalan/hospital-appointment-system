@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://192.168.1.7:3000/api';
+const BASE_URL = 'http://192.168.1.191:3001/api';
 
 const ADMIN_BASIC_TOKEN = btoa('admin:HastaneAdmin2024!');
 
@@ -36,9 +36,21 @@ export const api = {
   // Hasta
   randevularim: () => istek('/randevular/benim'),
   randevuIptal: (id: number) => istek(`/randevular/${id}/iptal`, { method: 'PATCH' }),
-  randevuAl: (doktorId: number, tarih: string, saat: string, notlar?: string) =>
-    istek('/randevular', { method: 'POST', body: JSON.stringify({ doktorId, tarih, saat: saat + ':00', notlar }) }),
-  doktorlar: () => istek('/randevular/doktorlar'),
+  randevuYenidenPlanla: (id: number, tarih: string, saat: string) =>
+    istek(`/randevular/${id}/yeniden-planla`, { method: 'PATCH', body: JSON.stringify({ tarih, saat }) }),
+  randevuAl: (doktorId: number, tarih: string, saat: string, notlar?: string, randevuTipi?: string) =>
+    istek('/randevular', { method: 'POST', body: JSON.stringify({ doktorId, tarih, saat: saat + ':00', notlar, randevuTipi }) }),
+
+  videoOdaGetir: (randevuId: number) =>
+    istek(`/randevular/${randevuId}/oda`),
+  doktorlar: (uzmanlik?: string, ad?: string) => {
+    const p = new URLSearchParams();
+    if (uzmanlik) p.set('uzmanlik', uzmanlik);
+    if (ad) p.set('ad', ad);
+    const q = p.toString();
+    return istek(`/randevular/doktorlar${q ? '?' + q : ''}`);
+  },
+  doktorProfil: (doktorId: number) => istek(`/randevular/doktor/${doktorId}`),
   doluSaatler: (doktorId: number, tarih: string) =>
     istek(`/randevular/dolu-saatler?doktorId=${doktorId}&tarih=${tarih}`),
   tibbiBilgiHasta: (randevuId: number) => istek(`/randevular/${randevuId}/tibbi-kayit`),
@@ -52,6 +64,16 @@ export const api = {
   }) => istek('/randevular/profil', { method: 'PATCH', body: JSON.stringify(data) }),
   sifreDegistir: (eskiSifre: string, yeniSifre: string) =>
     istek('/randevular/sifre-degistir', { method: 'PATCH', body: JSON.stringify({ eskiSifre, yeniSifre }) }),
+
+  // Değerlendirme
+  degerlendirmeGonder: (randevuId: number, puan: number, yorum?: string) =>
+    istek(`/randevular/${randevuId}/degerlendirme`, { method: 'POST', body: JSON.stringify({ puan, yorum }) }),
+  degerlendirmeGetir: (randevuId: number) =>
+    istek(`/randevular/${randevuId}/degerlendirme`),
+
+  // Push token
+  pushTokenKaydet: (token: string) =>
+    istek('/kullanici/push-token', { method: 'POST', body: JSON.stringify({ token }) }),
 
   // Bildirimler
   bildirimler: () => istek('/bildirimler'),
@@ -96,7 +118,7 @@ export const api = {
   adminOdemeDurumGuncelle: (id: number, durum: string) =>
     istek(`/admin/odemeler/${id}/durum`, { method: 'PATCH', body: JSON.stringify({ durum }) }, true),
 
-  // Admin — Toplu bildirim / duyuru
+  // Admin — Toplu bildirim
   adminTopluBildirim: (baslik: string, mesaj: string) =>
     istek('/admin/bildirim/toplu', { method: 'POST', body: JSON.stringify({ baslik, mesaj }) }, true),
 };

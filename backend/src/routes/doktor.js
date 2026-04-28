@@ -16,6 +16,8 @@ router.get('/randevular', async (req, res) => {
       .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
       .query(`
         SELECT r.RandevuID, r.RandevuTarihi, r.RandevuSaati, r.Durum, r.Notlar,
+               ISNULL(r.RandevuTipi, 'Hastane') AS RandevuTipi,
+               r.VideoOdaID,
                k.Ad + ' ' + k.Soyad AS HastaAdi
         FROM Randevular r
         JOIN Doktorlar d ON r.DoktorID = d.DoktorID

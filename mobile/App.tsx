@@ -7,6 +7,7 @@ import SifremiUnuttumEkrani from './src/screens/SifremiUnuttumEkrani';
 import HastaTabs from './src/navigation/HastaTabs';
 import DoktorTabs from './src/navigation/DoktorTabs';
 import AdminTabs from './src/navigation/AdminTabs';
+import VideoGorusmeEkrani from './src/screens/hasta/VideoGorusmeEkrani';
 
 const Stack = createNativeStackNavigator();
 
@@ -27,6 +28,7 @@ export default function App() {
         <Stack.Screen name="HastaAnaSayfa" component={HastaTabs} />
         <Stack.Screen name="DoktorAnaSayfa" component={DoktorTabs} />
         <Stack.Screen name="AdminAnaSayfa" component={AdminTabs} />
+        <Stack.Screen name="VideoGorusme" component={VideoGorusmeEkrani} options={{ headerShown: true, title: 'Video Görüşme', headerBackTitle: 'Geri' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -10,6 +10,7 @@ import AdminPaneli from './pages/AdminPaneli'
 import ProfilSayfasi from './pages/ProfilSayfasi'
 import SifreUnuttum from './pages/SifreUnuttum'
 import SifreSifirla from './pages/SifreSifirla'
+import VideoGorusme from './pages/VideoGorusme'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
             <Route path="/profil" element={<ProfilSayfasi />} />
             <Route path="/sifremi-unuttum" element={<SifreUnuttum />} />
             <Route path="/sifre-sifirla" element={<SifreSifirla />} />
+            <Route path="/gorusme/:randevuId" element={<VideoGorusme />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

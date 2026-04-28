@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:3000/api';
+const BASE_URL = 'http://localhost:3001/api';
 
 const ADMIN_BASIC_TOKEN = btoa(
   `${import.meta.env.VITE_ADMIN_BASIC_USER}:${import.meta.env.VITE_ADMIN_BASIC_PASS}`
@@ -104,14 +104,37 @@ export const api = {
   sifreSifirla: (token: string, yeniSifre: string) =>
     istek('/auth/sifre-sifirla', { method: 'POST', body: JSON.stringify({ token, yeniSifre }) }),
 
-  doktorlar: () =>
-    istek('/randevular/doktorlar'),
+  uzmanliklar: () =>
+    istek('/randevular/uzmanliklar'),
+
+  doktorlar: (uzmanlik?: string, ad?: string) => {
+    const p = new URLSearchParams();
+    if (uzmanlik) p.set('uzmanlik', uzmanlik);
+    if (ad) p.set('ad', ad);
+    const q = p.toString();
+    return istek(`/randevular/doktorlar${q ? '?' + q : ''}`);
+  },
+
+  doktorProfil: (doktorId: number) =>
+    istek(`/randevular/doktor/${doktorId}`),
 
   doluSaatler: (doktorId: number, tarih: string) =>
     istek(`/randevular/dolu-saatler?doktorId=${doktorId}&tarih=${tarih}`),
 
-  randevuAl: (doktorId: number, tarih: string, saat: string, notlar?: string) =>
-    istek('/randevular', { method: 'POST', body: JSON.stringify({ doktorId, tarih, saat: saat + ':00', notlar }) }),
+  randevuYenidenPlanla: (id: number, tarih: string, saat: string) =>
+    istek(`/randevular/${id}/yeniden-planla`, { method: 'PATCH', body: JSON.stringify({ tarih, saat }) }),
+
+  degerlendirmeGonder: (randevuId: number, puan: number, yorum?: string) =>
+    istek(`/randevular/${randevuId}/degerlendirme`, { method: 'POST', body: JSON.stringify({ puan, yorum }) }),
+
+  degerlendirmeGetir: (randevuId: number) =>
+    istek(`/randevular/${randevuId}/degerlendirme`),
+
+  randevuAl: (doktorId: number, tarih: string, saat: string, notlar?: string, randevuTipi?: string) =>
+    istek('/randevular', { method: 'POST', body: JSON.stringify({ doktorId, tarih, saat: saat + ':00', notlar, randevuTipi }) }),
+
+  videoOdaGetir: (randevuId: number) =>
+    istek(`/randevular/${randevuId}/oda`),
 
   randevuIptal: (id: number) =>
     istek(`/randevular/${id}/iptal`, { method: 'PATCH' }),
@@ -211,7 +234,7 @@ export const api = {
     if (tarihBit) params.set('tarihBit', tarihBit)
     const token = localStorage.getItem('token')
     const ADMIN_BASIC = btoa(`${import.meta.env.VITE_ADMIN_BASIC_USER}:${import.meta.env.VITE_ADMIN_BASIC_PASS}`)
-    const res = await fetch(`http://localhost:3000/api/admin/raporlar/csv?${params.toString()}`, {
+    const res = await fetch(`http://localhost:3001/api/admin/raporlar/csv?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'X-Admin-Auth': `Basic ${ADMIN_BASIC}`,
