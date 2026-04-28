@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
 import { api } from '../api'
+import { useTranslation } from 'react-i18next'
 
 interface Bildirim {
   BildirimID: number
@@ -20,6 +21,15 @@ export default function Navbar({ kullaniciIcon, doktorPrefix = false }: Props) {
   const { theme, toggle } = useTheme()
   const { kullanici, cikisYap } = useAuth()
   const navigate = useNavigate()
+  const { i18n } = useTranslation()
+  const [dil, setDil] = useState(i18n.language || 'tr')
+
+  function dilDegistir() {
+    const yeniDil = dil === 'tr' ? 'en' : 'tr'
+    i18n.changeLanguage(yeniDil)
+    localStorage.setItem('dil', yeniDil)
+    setDil(yeniDil)
+  }
   const [bildirimler, setBildirimler] = useState<Bildirim[]>([])
   const [acik, setAcik] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -113,6 +123,15 @@ export default function Navbar({ kullaniciIcon, doktorPrefix = false }: Props) {
             )}
           </div>
         )}
+
+        {/* Dil değiştirme */}
+        <button
+          onClick={dilDegistir}
+          className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition text-xs font-bold text-gray-600 dark:text-gray-300"
+          title={dil === 'tr' ? 'Switch to English' : 'Türkçeye geç'}
+        >
+          {dil === 'tr' ? 'EN' : 'TR'}
+        </button>
 
         <button
           onClick={toggle}
