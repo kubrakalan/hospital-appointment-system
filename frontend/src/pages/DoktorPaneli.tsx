@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import Navbar from '../components/Navbar'
 import DurumBadge from '../components/DurumBadge'
@@ -14,6 +15,7 @@ const durumRenk: Record<string, string> = {
 interface Randevu {
   RandevuID: number; HastaAdi: string; RandevuTarihi: string
   RandevuSaati: string; Durum: string; Notlar: string | null
+  RandevuTipi?: string; VideoOdaID?: string
 }
 
 interface DoktorIstatistik {
@@ -52,9 +54,12 @@ const inputCls = "border border-gray-200 dark:border-gray-600 bg-white dark:bg-g
 const textareaCls = `${inputCls} resize-none`
 
 export default function DoktorPaneli() {
+  const navigate = useNavigate()
   const [randevular, setRandevular] = useState<Randevu[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [aktifSekme, setAktifSekme] = useState<'liste' | 'takvim' | 'istatistik' | 'calisma'>('liste')
+  const [aktifSekme, setAktifSekme] = useState<'liste' | 'takvim' | 'istatistik' | 'calisma' | 'gecmis'>('liste')
+  const [gecmisKayitlar, setGecmisKayitlar] = useState<{ randevu: Randevu; kayit: Record<string, string | null> | null }[]>([])
+  const [gecmisYukleniyor, setGecmisYukleniyor] = useState(false)
   const [haftaBaslangic, setHaftaBaslangic] = useState(() => haftaBaslangici(new Date()))
 
   // İstatistik
@@ -110,6 +115,25 @@ export default function DoktorPaneli() {
       api.doktorIstatistikler().then(setIstatistik).catch(() => {}).finally(() => setIstatistikYukleniyor(false))
     }
   }, [aktifSekme, istatistik])
+
+  useEffect(() => {
+    if (aktifSekme !== 'gecmis' || gecmisKayitlar.length > 0) return
+    const tamamlananlar = [...randevular]
+      .filter(r => r.Durum === 'Tamamlandı' || r.Durum === 'Gelmedi')
+      .sort((a, b) => {
+        const ta = a.RandevuTarihi + String(a.RandevuSaati)
+        const tb = b.RandevuTarihi + String(b.RandevuSaati)
+        return tb.localeCompare(ta)
+      })
+    if (tamamlananlar.length === 0) { setGecmisKayitlar([]); return }
+    setGecmisYukleniyor(true)
+    Promise.all(
+      tamamlananlar.map(async rv => {
+        try { return { randevu: rv, kayit: await api.doktorTibbiBilgiGetir(rv.RandevuID) }
+        } catch { return { randevu: rv, kayit: null } }
+      })
+    ).then(setGecmisKayitlar).finally(() => setGecmisYukleniyor(false))
+  }, [aktifSekme, randevular, gecmisKayitlar.length])
 
   async function durumGuncelle(id: number, durum: string) {
     try {
@@ -220,6 +244,7 @@ export default function DoktorPaneli() {
         <div className="flex gap-2 mb-6 flex-wrap">
           {([
             { key: 'liste',      label: '📋 Liste' },
+            { key: 'gecmis',     label: '🗂️ Geçmiş' },
             { key: 'takvim',     label: '📆 Takvim' },
             { key: 'istatistik', label: '📊 İstatistiklerim' },
             { key: 'calisma',    label: '🕐 Çalışma Saatleri' },
@@ -281,6 +306,9 @@ export default function DoktorPaneli() {
                           <td className="py-4"><DurumBadge durum={r.Durum} /></td>
                           <td className="py-4">
                             <div className="flex flex-wrap gap-1.5">
+                              {r.RandevuTipi === 'Online' && (r.Durum === 'Beklemede' || r.Durum === 'Onaylandı') && (
+                                <button onClick={() => navigate(`/gorusme/${r.RandevuID}`)} className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition font-semibold">📹 Katıl</button>
+                              )}
                               {r.Durum === 'Beklemede' && <>
                                 <button onClick={() => durumGuncelle(r.RandevuID, 'Onaylandı')} className="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">Onayla</button>
                                 <button onClick={() => durumGuncelle(r.RandevuID, 'İptal')} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1 rounded-lg hover:bg-red-200 transition">İptal</button>
@@ -312,6 +340,9 @@ export default function DoktorPaneli() {
                       </div>
                       <p className="text-gray-500 dark:text-gray-400 text-xs mb-3 pl-7">{r.RandevuTarihi.split('T')[0]} · {String(r.RandevuSaati).substring(0, 5)}</p>
                       <div className="flex flex-wrap gap-1.5 pl-7">
+                        {r.RandevuTipi === 'Online' && (r.Durum === 'Beklemede' || r.Durum === 'Onaylandı') && (
+                          <button onClick={() => navigate(`/gorusme/${r.RandevuID}`)} className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition font-semibold">📹 Katıl</button>
+                        )}
                         {r.Durum === 'Beklemede' && <>
                           <button onClick={() => durumGuncelle(r.RandevuID, 'Onaylandı')} className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition">Onayla</button>
                           <button onClick={() => durumGuncelle(r.RandevuID, 'İptal')} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-200 transition">İptal</button>
