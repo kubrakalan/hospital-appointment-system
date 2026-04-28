@@ -7,6 +7,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import { useTheme } from '../theme';
+import { pushTokenKaydet } from '../pushNotification';
 
 export default function GirisEkrani({ navigation }: any) {
   const { c } = useTheme();
@@ -24,6 +25,7 @@ export default function GirisEkrani({ navigation }: any) {
       await AsyncStorage.setItem('token', data.token);
       if (data.refreshToken) await AsyncStorage.setItem('refreshToken', data.refreshToken);
       await AsyncStorage.setItem('kullanici', JSON.stringify(data.kullanici));
+      pushTokenKaydet(); // hata olursa sessizce geç
 
       const rol = (data.kullanici.rol as string).toLowerCase();
       if (rol === 'hasta') navigation.replace('HastaAnaSayfa');
