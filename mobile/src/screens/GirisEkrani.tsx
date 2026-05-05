@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
   Platform, ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { api } from '../api';
-import { useTheme } from '../theme';
+import { useTheme } from '../ThemeContext';
 import { pushTokenKaydet } from '../pushNotification';
 
 export default function GirisEkrani({ navigation }: any) {
@@ -15,6 +16,32 @@ export default function GirisEkrani({ navigation }: any) {
   const [sifre, setSifre] = useState('');
   const [yukleniyor, setYukleniyor] = useState(false);
   const [hata, setHata] = useState('');
+  const [biyometrikVar, setBiyometrikVar] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const destekleniyor = await LocalAuthentication.hasHardwareAsync();
+      const kayitli = await LocalAuthentication.isEnrolledAsync();
+      const oncekiToken = await AsyncStorage.getItem('token');
+      setBiyometrikVar(destekleniyor && kayitli && !!oncekiToken);
+    })();
+  }, []);
+
+  async function biyometrikGiris() {
+    const sonuc = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'MediRandevu\'ya giriş yap',
+      fallbackLabel: 'Şifre ile gir',
+    });
+    if (!sonuc.success) return;
+    const token = await AsyncStorage.getItem('token');
+    const kullanici = await AsyncStorage.getItem('kullanici');
+    if (!token || !kullanici) { setHata('Lütfen önce e-posta ile giriş yapın.'); return; }
+    const rol = (JSON.parse(kullanici).rol as string).toLowerCase();
+    pushTokenKaydet();
+    if (rol === 'hasta') navigation.replace('HastaAnaSayfa');
+    else if (rol === 'doktor') navigation.replace('DoktorAnaSayfa');
+    else if (rol === 'admin') navigation.replace('AdminAnaSayfa');
+  }
 
   async function girisYap() {
     if (!email || !sifre) { setHata('E-posta ve şifre giriniz.'); return; }
@@ -109,6 +136,13 @@ export default function GirisEkrani({ navigation }: any) {
               : <Text style={styles.butonYazi}>Giriş Yap</Text>
             }
           </TouchableOpacity>
+
+          {biyometrikVar && (
+            <TouchableOpacity style={styles.biyometrikButon} onPress={biyometrikGiris}>
+              <Text style={styles.biyometrikIkon}>🔒</Text>
+              <Text style={[styles.biyometrikYazi, { color: c.textMuted }]}>Yüz / Parmak İzi ile Giriş</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Kayıt linki */}
@@ -161,6 +195,9 @@ const styles = StyleSheet.create({
   },
   butonDevre: { backgroundColor: '#7dd3fc' },
   butonYazi: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  biyometrikButon: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, paddingVertical: 10 },
+  biyometrikIkon: { fontSize: 20 },
+  biyometrikYazi: { fontSize: 14, fontWeight: '600' },
   kayitLink: { alignItems: 'center', marginTop: 24 },
   kayitYazi: { fontSize: 14 },
   kayitVurgu: { color: '#0ea5e9', fontWeight: '700' },

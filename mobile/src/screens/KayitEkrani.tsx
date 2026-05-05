@@ -5,7 +5,7 @@ import {
   ScrollView, Alert,
 } from 'react-native';
 import { api } from '../api';
-import { useTheme } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 export default function KayitEkrani({ navigation }: any) {
   const { c } = useTheme();

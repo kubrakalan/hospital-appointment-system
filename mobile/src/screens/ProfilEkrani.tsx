@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TextInput,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator, Alert, Linking, Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { api } from '../api';
-import { useTheme } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 const CINSIYET = ['Kadın', 'Erkek', 'Belirtmek istemiyorum'];
 const KAN_GRUPLARI = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', '0+', '0-'];
@@ -17,7 +18,7 @@ function Bolum({ baslik, c }: { baslik: string; c: any }) {
 }
 
 export default function ProfilEkrani() {
-  const { c } = useTheme();
+  const { c, isDark, toggleTheme } = useTheme();
   const [profil, setProfil] = useState<any>(null);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [kaydediyor, setKaydediyor] = useState(false);
@@ -89,6 +90,30 @@ export default function ProfilEkrani() {
     } catch (err: any) {
       Alert.alert('Hata', err.message);
     } finally { setKaydediyor(false); }
+  }
+
+  async function acilSOS() {
+    const tel = profil?.AcilKisiTelefon;
+    if (!tel) { Alert.alert('Acil kişi yok', 'Profil düzenleme ekranından acil kişi ekleyin.'); return; }
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      let konumLink = '';
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        konumLink = ` Konum: https://maps.google.com/?q=${loc.coords.latitude},${loc.coords.longitude}`;
+      }
+      const mesaj = `ACİL DURUM! ${profil?.Ad} ${profil?.Soyad} yardıma ihtiyaç duyuyor.${konumLink}`;
+      await Linking.openURL(`sms:${tel}?body=${encodeURIComponent(mesaj)}`);
+    } catch { Alert.alert('Hata', 'SMS gönderilemedi.'); }
+  }
+
+  async function konumuPaylasim() {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('İzin gerekli', 'Konum iznini ayarlardan açın.'); return; }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      await Linking.openURL(`https://maps.google.com/?q=${loc.coords.latitude},${loc.coords.longitude}`);
+    } catch { Alert.alert('Hata', 'Konum alınamadı.'); }
   }
 
   async function sifreDegistir() {
@@ -305,6 +330,42 @@ export default function ProfilEkrani() {
           </View>
         )}
       </View>
+
+      {/* Uygulama Ayarları */}
+      <View style={[styles.kart, { backgroundColor: c.card, marginTop: 14 }]}>
+        <Text style={[styles.bolumBaslik, { color: '#0ea5e9', marginTop: 0 }]}>UYGULAMA AYARLARI</Text>
+
+        {/* Gece/Gündüz modu */}
+        <View style={[styles.satirKutu, { borderBottomColor: c.border }]}>
+          <Text style={styles.satirIcon}>🌙</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.satirEtiket, { color: c.textFaint }]}>Görünüm</Text>
+            <Text style={[styles.satirDeger, { color: c.text }]}>{isDark ? 'Gece Modu' : 'Gündüz Modu'}</Text>
+          </View>
+          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ true: '#0ea5e9', false: '#d1d5db' }} thumbColor="#fff" />
+        </View>
+
+        {/* Konumumu Göster */}
+        <TouchableOpacity style={[styles.satirKutu, { borderBottomColor: c.border }]} onPress={konumuPaylasim}>
+          <Text style={styles.satirIcon}>📍</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.satirEtiket, { color: c.textFaint }]}>Konumumu Göster</Text>
+            <Text style={[styles.satirDeger, { color: c.text }]}>Google Maps'te aç</Text>
+          </View>
+          <Text style={{ color: c.textFaint, fontSize: 18 }}>›</Text>
+        </TouchableOpacity>
+
+        {/* Acil SOS */}
+        {isHasta && profil?.AcilKisiAd && (
+          <TouchableOpacity style={styles.sosButon} onPress={acilSOS}>
+            <Text style={styles.sosIkon}>🆘</Text>
+            <View>
+              <Text style={styles.sosBaslik}>Acil SOS</Text>
+              <Text style={styles.sosAlt}>{profil.AcilKisiAd} · {profil.AcilKisiTelefon}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -358,4 +419,8 @@ const styles = StyleSheet.create({
   iptalYazi: { fontWeight: '600', fontSize: 14 },
   sifreSatir: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sifreBaslik: { fontSize: 15, fontWeight: '700' },
+  sosButon: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 14, backgroundColor: '#fef2f2', borderRadius: 12, padding: 14 },
+  sosIkon: { fontSize: 28 },
+  sosBaslik: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
+  sosAlt: { fontSize: 12, color: '#ef4444', marginTop: 2 },
 });

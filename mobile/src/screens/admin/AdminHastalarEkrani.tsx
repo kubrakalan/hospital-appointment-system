@@ -4,7 +4,7 @@ import {
   TextInput, RefreshControl, Modal, ScrollView,
 } from 'react-native';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 import { KartSkeleton } from '../../components/Skeleton';
 
 interface Hasta {

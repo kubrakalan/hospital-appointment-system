@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { api } from '../api';
-import { useTheme } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 export default function SifremiUnuttumEkrani({ navigation }: any) {
   const { c } = useTheme();

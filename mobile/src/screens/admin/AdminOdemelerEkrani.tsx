@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 import { KartSkeleton } from '../../components/Skeleton';
 
 interface Odeme {

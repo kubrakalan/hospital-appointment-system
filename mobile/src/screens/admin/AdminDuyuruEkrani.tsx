@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 
 const SABLONLAR = [
   { baslik: 'Sistem Bakımı', mesaj: 'Sistemimiz bu gece 23:00-01:00 saatleri arasında bakıma alınacaktır. Bu sürede randevu alınamayacaktır.' },

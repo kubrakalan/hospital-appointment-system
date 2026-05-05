@@ -6,8 +6,11 @@ require('dotenv').config();
 const logger = require('./logger');
 const app = express();
 
-// CORS: Frontend'in (port 5173) bu sunucuya istek atmasına izin ver
-app.use(cors({ origin: /^http:\/\/localhost(:\d+)?$/ }));
+// CORS: Web frontend + React Native (Origin header göndermez, null origin)
+app.use(cors({
+  origin: (origin, cb) => cb(null, true), // localhost, LAN IP ve mobil (no-origin) hepsine izin ver
+  credentials: true,
+}));
 
 // Gelen isteklerin body'sini JSON olarak oku
 app.use(express.json());
@@ -24,6 +27,8 @@ app.use('/api/doktor', require('./routes/doktor'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/bildirimler', require('./routes/bildirimler'));
 app.use('/api/kullanici', require('./routes/kullanici'));
+app.use('/api/mesajlar', require('./routes/mesajlar'));
+app.use('/api/saglik', require('./routes/saglik'));
 
 // Test endpoint'i — sunucunun çalışıp çalışmadığını kontrol etmek için
 app.get('/api/ping', (_req, res) => {

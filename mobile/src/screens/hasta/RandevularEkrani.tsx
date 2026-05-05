@@ -3,8 +3,11 @@ import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   Alert, RefreshControl, ScrollView, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
+
+const CACHE_KEY = 'cache_randevularim';
 import { KartSkeleton } from '../../components/Skeleton';
 
 interface Randevu {
@@ -38,6 +41,7 @@ export default function RandevularEkrani({ navigation }: any) {
   const [yenileniyor, setYenileniyor] = useState(false);
   const [banBitis, setBanBitis] = useState<string | null>(null);
   const [banSebebi, setBanSebebi] = useState<string | null>(null);
+  const [cevrimdisi, setCevrimdisi] = useState(false);
   const [kontrolUyarilari, setKontrolUyarilari] = useState<{ doktorAdi: string; tarih: string }[]>([]);
   const [degYapildi, setDegYapildi] = useState<Record<number, boolean>>({});
 
@@ -69,6 +73,8 @@ export default function RandevularEkrani({ navigation }: any) {
       const [data, profil] = await Promise.all([api.randevularim(), api.profilim()]);
       const liste: Randevu[] = Array.isArray(data) ? data : [];
       setRandevular(liste);
+      setCevrimdisi(false);
+      AsyncStorage.setItem(CACHE_KEY, JSON.stringify(liste)).catch(() => {});
 
       if (profil.BanBitisTarihi && new Date(profil.BanBitisTarihi) > new Date()) {
         setBanBitis(profil.BanBitisTarihi.split('T')[0]); setBanSebebi(profil.BanSebebi ?? null);
@@ -92,8 +98,10 @@ export default function RandevularEkrani({ navigation }: any) {
       }));
       setKontrolUyarilari(uyarilar);
       setDegYapildi(yapildi);
-    } catch (err: any) { Alert.alert('Hata', err.message); }
-    finally { setYukleniyor(false); setYenileniyor(false); }
+    } catch {
+      const cached = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
+      if (cached) { setRandevular(JSON.parse(cached)); setCevrimdisi(true); }
+    } finally { setYukleniyor(false); setYenileniyor(false); }
   }, []);
 
   useEffect(() => { yukle(); }, [yukle]);
@@ -153,6 +161,15 @@ export default function RandevularEkrani({ navigation }: any) {
         refreshControl={<RefreshControl refreshing={yenileniyor} onRefresh={() => { setYenileniyor(true); yukle(); }} tintColor="#0ea5e9" />}
         ListHeaderComponent={
           <>
+            {cevrimdisi && (
+              <View style={[styles.uyariBanner, { backgroundColor: '#fefce8', borderColor: '#fde68a', marginHorizontal: 16, marginTop: 12 }]}>
+                <Text style={styles.uyariIkon}>📴</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.uyariBaslik, { color: '#92400e' }]}>Çevrimdışı Mod</Text>
+                  <Text style={[styles.uyariMetin, { color: '#b45309' }]}>İnternet bağlantısı yok — önbellek gösteriliyor</Text>
+                </View>
+              </View>
+            )}
             {banBitis && (
               <View style={[styles.uyariBanner, { backgroundColor: '#fef2f2', borderColor: '#fca5a5' }]}>
                 <Text style={styles.uyariIkon}>🚫</Text>
@@ -221,6 +238,12 @@ export default function RandevularEkrani({ navigation }: any) {
                     onPress={() => { setYenidenModal(item); setYeniTarih(''); setYeniSaat(''); }}
                   >
                     <Text style={{ color: '#3b82f6', fontSize: 12, fontWeight: '600' }}>🔄 Taşı</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.aksiyon, { borderColor: '#a78bfa' }]}
+                    onPress={() => navigation.navigate('Mesajlasma', { randevuId: item.RandevuID, karsiAd: 'Dr. ' + item.DoktorAdi })}
+                  >
+                    <Text style={{ color: '#7c3aed', fontSize: 12, fontWeight: '600' }}>💬 Mesaj</Text>
                   </TouchableOpacity>
                 </>
               )}

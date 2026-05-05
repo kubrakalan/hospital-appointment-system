@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 import { SkeletonBox } from '../../components/Skeleton';
 
 export default function AdminIstatistikEkrani() {

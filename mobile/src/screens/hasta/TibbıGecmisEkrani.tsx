@@ -4,9 +4,13 @@ import {
   RefreshControl, TouchableOpacity, Modal,
   TextInput, Alert, ActivityIndicator,
 } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 import { KartSkeleton } from '../../components/Skeleton';
+import { saatFormatla } from '../../utils';
 
 interface Randevu {
   RandevuID: number;
@@ -43,7 +47,7 @@ function YildizPuan({ puan, onChange }: { puan: number; onChange: (p: number) =>
   );
 }
 
-export default function TibbiGecmisEkrani() {
+export default function TibbiGecmisEkrani({ navigation }: any) {
   const { c } = useTheme();
   const [kayitlar, setKayitlar] = useState<{ randevu: Randevu; tibbi: TibbiBilgi | null }[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -97,6 +101,50 @@ export default function TibbiGecmisEkrani() {
 
   useEffect(() => { yukle(); }, [yukle]);
 
+  async function ilacHatirlaticiKur(recete: string, doktorAd: string) {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('İzin gerekli', 'Bildirim iznini ayarlardan açın.'); return; }
+    const saatler = [8, 13, 20];
+    for (const saat of saatler) {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '💊 İlaç Hatırlatıcısı',
+          body: `Dr. ${doktorAd} reçetesi: ${recete.substring(0, 60)}${recete.length > 60 ? '...' : ''}`,
+          sound: true,
+        },
+        trigger: { hour: saat, minute: 0, repeats: true } as any,
+      });
+    }
+    Alert.alert('✅ Hatırlatıcı Kuruldu', 'Her gün 08:00, 13:00 ve 20:00\'de hatırlatılacak.');
+  }
+
+  async function recetePdfOlustur(tibbi: TibbiBilgi, randevu: Randevu) {
+    try {
+      const html = `
+        <html><head><meta charset="utf-8"/>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 32px; color: #111; }
+          h1 { color: #0ea5e9; font-size: 22px; border-bottom: 2px solid #0ea5e9; padding-bottom: 8px; }
+          h2 { font-size: 15px; color: #374151; margin-top: 20px; }
+          p { font-size: 14px; line-height: 1.6; color: #374151; }
+          .kutu { background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 12px 16px; border-radius: 4px; margin-top: 8px; }
+          .footer { margin-top: 40px; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+        </style></head><body>
+        <h1>🏥 MediRandevu — E-Reçete</h1>
+        <p><b>Doktor:</b> Dr. ${randevu.DoktorAdi} — ${randevu.UzmanlikAdi}</p>
+        <p><b>Tarih:</b> ${tarihFormatla(randevu.RandevuTarihi)} · ${saatFormatla(randevu.RandevuSaati)}</p>
+        ${tibbi.Tani ? `<h2>Tanı</h2><div class="kutu"><p>${tibbi.Tani}</p></div>` : ''}
+        ${tibbi.Recete ? `<h2>Reçete / İlaçlar</h2><div class="kutu"><p>${tibbi.Recete}</p></div>` : ''}
+        ${tibbi.UygulananIslem ? `<h2>Uygulanan İşlem</h2><div class="kutu"><p>${tibbi.UygulananIslem}</p></div>` : ''}
+        ${tibbi.LabNotu ? `<h2>Lab / Tahlil</h2><div class="kutu"><p>${tibbi.LabNotu}</p></div>` : ''}
+        ${tibbi.SonrakiKontrol ? `<h2>Sonraki Kontrol</h2><div class="kutu"><p>${tarihFormatla(tibbi.SonrakiKontrol)}</p></div>` : ''}
+        <div class="footer">MediRandevu tarafından oluşturuldu · ${new Date().toLocaleDateString('tr-TR')}</div>
+        </body></html>`;
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+    } catch { Alert.alert('Hata', 'PDF oluşturulamadı.'); }
+  }
+
   function degerlendirmeAc(randevuId: number) {
     setSeciliRandevuId(randevuId);
     setDegPuan(5);
@@ -127,15 +175,6 @@ export default function TibbiGecmisEkrani() {
     );
   }
 
-  if (kayitlar.length === 0) {
-    return (
-      <View style={[styles.orta, { backgroundColor: c.bg }]}>
-        <Text style={styles.bosEmoji}>🗂️</Text>
-        <Text style={[styles.bosYazi, { color: c.textFaint }]}>Henüz tamamlanmış randevunuz yok.</Text>
-      </View>
-    );
-  }
-
   return (
     <>
       <ScrollView
@@ -143,7 +182,24 @@ export default function TibbiGecmisEkrani() {
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={yenileniyor} onRefresh={() => { setYenileniyor(true); yukle(); }} tintColor="#0ea5e9" />}
       >
-        {kayitlar.map(({ randevu, tibbi }) => (
+        <TouchableOpacity
+          style={[styles.labButon, { backgroundColor: c.card, borderColor: c.border }]}
+          onPress={() => navigation.navigate('LabSonuclari')}
+        >
+          <Text style={{ fontSize: 20 }}>🧪</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.labButonBaslik, { color: c.text }]}>Lab Sonuçları</Text>
+            <Text style={[styles.labButonAlt, { color: c.textMuted }]}>Tahlil ve test sonuçlarınızı görün</Text>
+          </View>
+          <Text style={{ color: c.textFaint, fontSize: 18 }}>›</Text>
+        </TouchableOpacity>
+
+        {kayitlar.length === 0 ? (
+          <View style={styles.orta}>
+            <Text style={styles.bosEmoji}>🗂️</Text>
+            <Text style={[styles.bosYazi, { color: c.textFaint }]}>Henüz tamamlanmış randevunuz yok.</Text>
+          </View>
+        ) : kayitlar.map(({ randevu, tibbi }) => (
           <View key={randevu.RandevuID} style={[styles.kart, { backgroundColor: c.card }]}>
             <View style={[styles.kartBaslik, { borderBottomColor: c.border }]}>
               <View>
@@ -152,7 +208,7 @@ export default function TibbiGecmisEkrani() {
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={[styles.tarih, { color: c.textMuted }]}>{tarihFormatla(randevu.RandevuTarihi)}</Text>
-                <Text style={[styles.saat, { color: c.textFaint }]}>{String(randevu.RandevuSaati).substring(0, 5)}</Text>
+                <Text style={[styles.saat, { color: c.textFaint }]}>{saatFormatla(randevu.RandevuSaati)}</Text>
               </View>
             </View>
 
@@ -161,18 +217,34 @@ export default function TibbiGecmisEkrani() {
             ) : (
               <View style={styles.bilgiGrid}>
                 {[
-                  { icon: '🔬', label: 'Tanı', deger: tibbi.Tani },
-                  { icon: '💊', label: 'Reçete', deger: tibbi.Recete },
+                  { icon: '🔬', label: 'Tanı', deger: tibbi.Tani, isRecete: false },
+                  { icon: '💊', label: 'Reçete', deger: tibbi.Recete, isRecete: true },
                   { icon: '🩺', label: 'Uygulanan İşlem', deger: tibbi.UygulananIslem },
                   { icon: '🧪', label: 'Lab / Tahlil', deger: tibbi.LabNotu },
                   { icon: '📅', label: 'Sonraki Kontrol', deger: tibbi.SonrakiKontrol ? tarihFormatla(tibbi.SonrakiKontrol) : null },
                 ].filter(f => f.deger).map(f => (
                   <View key={f.label} style={[styles.bilgiSatir, { backgroundColor: c.surface }]}>
-                    <Text style={[styles.bilgiLabel, { color: c.textMuted }]}>{f.icon} {f.label}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={[styles.bilgiLabel, { color: c.textMuted }]}>{f.icon} {f.label}</Text>
+                      {f.isRecete && (
+                        <TouchableOpacity onPress={() => ilacHatirlaticiKur(f.deger!, randevu.DoktorAdi)} style={styles.hatirlaticiButon}>
+                          <Text style={styles.hatirlaticiYazi}>⏰ Hatırlatıcı</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     <Text style={[styles.bilgiDeger, { color: c.text }]}>{f.deger}</Text>
                   </View>
                 ))}
               </View>
+            )}
+
+            {tibbi && (
+              <TouchableOpacity
+                style={styles.pdfButon}
+                onPress={() => recetePdfOlustur(tibbi, randevu)}
+              >
+                <Text style={styles.pdfButonYazi}>📄 E-Reçete PDF İndir</Text>
+              </TouchableOpacity>
             )}
 
             {randevu.Durum === 'Tamamlandı' && (
@@ -261,6 +333,8 @@ const styles = StyleSheet.create({
   bilgiSatir: { borderRadius: 10, padding: 12 },
   bilgiLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
   bilgiDeger: { fontSize: 13, lineHeight: 20 },
+  hatirlaticiButon: { backgroundColor: '#eff6ff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  hatirlaticiYazi: { fontSize: 11, color: '#0ea5e9', fontWeight: '700' },
   degButon: {
     backgroundColor: '#f59e0b', borderRadius: 10,
     paddingVertical: 9, alignItems: 'center',
@@ -292,4 +366,16 @@ const styles = StyleSheet.create({
   },
   modalButonPrimary: { backgroundColor: '#f59e0b' },
   modalButonYazi: { fontWeight: '700', fontSize: 15 },
+  labButon: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
+  },
+  labButonBaslik: { fontSize: 14, fontWeight: '700' },
+  labButonAlt: { fontSize: 12, marginTop: 2 },
+  pdfButon: {
+    borderRadius: 10, paddingVertical: 9, alignItems: 'center',
+    backgroundColor: '#eff6ff', marginTop: 10, borderWidth: 1, borderColor: '#bfdbfe',
+  },
+  pdfButonYazi: { color: '#1d4ed8', fontWeight: '700', fontSize: 13 },
 });

@@ -1,5 +1,6 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ThemeProvider } from './src/ThemeContext';
 import KarsilamaEkrani from './src/screens/KarsilamaEkrani';
 import GirisEkrani from './src/screens/GirisEkrani';
 import KayitEkrani from './src/screens/KayitEkrani';
@@ -8,28 +9,34 @@ import HastaTabs from './src/navigation/HastaTabs';
 import DoktorTabs from './src/navigation/DoktorTabs';
 import AdminTabs from './src/navigation/AdminTabs';
 import VideoGorusmeEkrani from './src/screens/hasta/VideoGorusmeEkrani';
+import BildirimlerEkrani from './src/screens/hasta/BildirimlerEkrani';
+import LabSonuclariEkrani from './src/screens/hasta/LabSonuclariEkrani';
+import MesajlasmaEkrani from './src/screens/hasta/MesajlasmaEkrani';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: 'fade',
-        }}
-        initialRouteName="Karsilama"
-      >
-        <Stack.Screen name="Karsilama" component={KarsilamaEkrani} />
-        <Stack.Screen name="Giris" component={GirisEkrani} options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="Kayit" component={KayitEkrani} options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="SifremiUnuttum" component={SifremiUnuttumEkrani} options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="HastaAnaSayfa" component={HastaTabs} />
-        <Stack.Screen name="DoktorAnaSayfa" component={DoktorTabs} />
-        <Stack.Screen name="AdminAnaSayfa" component={AdminTabs} />
-        <Stack.Screen name="VideoGorusme" component={VideoGorusmeEkrani} options={{ headerShown: true, title: 'Video Görüşme', headerBackTitle: 'Geri' }} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }} initialRouteName="Karsilama">
+          <Stack.Screen name="Karsilama" component={KarsilamaEkrani} />
+          <Stack.Screen name="Giris" component={GirisEkrani} options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="Kayit" component={KayitEkrani} options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="SifremiUnuttum" component={SifremiUnuttumEkrani} options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="HastaAnaSayfa" component={HastaTabs} />
+          <Stack.Screen name="DoktorAnaSayfa" component={DoktorTabs} />
+          <Stack.Screen name="AdminAnaSayfa" component={AdminTabs} />
+          <Stack.Screen name="VideoGorusme" component={VideoGorusmeEkrani}
+            options={{ headerShown: true, title: 'Video Görüşme', headerBackTitle: 'Geri' }} />
+          <Stack.Screen name="Bildirimler" component={BildirimlerEkrani}
+            options={{ headerShown: true, title: 'Bildirimler', headerBackTitle: 'Geri' }} />
+          <Stack.Screen name="LabSonuclari" component={LabSonuclariEkrani}
+            options={{ headerShown: true, title: 'Lab Sonuçları', headerBackTitle: 'Geri' }} />
+          <Stack.Screen name="Mesajlasma" component={MesajlasmaEkrani}
+            options={({ route }: any) => ({ headerShown: true, title: route.params?.karsiAd ?? 'Mesajlar', headerBackTitle: 'Geri' })} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ThemeProvider>
   );
 }

@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Linking, Alert, ScrollView,
 } from 'react-native';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 
 interface OdaBilgi {
   odaId: string;

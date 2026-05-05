@@ -4,7 +4,7 @@ import {
   Alert, TextInput, RefreshControl,
 } from 'react-native';
 import { api } from '../../api';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../ThemeContext';
 import { KartSkeleton } from '../../components/Skeleton';
 
 interface Randevu {

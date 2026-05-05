@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://192.168.1.191:3001/api';
+const BASE_URL = 'http://192.168.1.7:3001/api';
 
 const ADMIN_BASIC_TOKEN = btoa('admin:HastaneAdmin2024!');
 
@@ -121,4 +121,17 @@ export const api = {
   // Admin — Toplu bildirim
   adminTopluBildirim: (baslik: string, mesaj: string) =>
     istek('/admin/bildirim/toplu', { method: 'POST', body: JSON.stringify({ baslik, mesaj }) }, true),
+
+  // Mesajlaşma
+  mesajlar: (randevuId: number) => istek(`/mesajlar/${randevuId}`),
+  mesajGonder: (randevuId: number, mesaj: string) =>
+    istek(`/mesajlar/${randevuId}`, { method: 'POST', body: JSON.stringify({ mesaj }) }),
+  mesajlariOkundu: (randevuId: number) =>
+    istek(`/mesajlar/${randevuId}/okundu`, { method: 'PATCH' }),
+
+  // Sağlık takibi
+  saglikKayitlari: () => istek('/saglik'),
+  saglikEkle: (tip: string, deger: string, not?: string) =>
+    istek('/saglik', { method: 'POST', body: JSON.stringify({ tip, deger, not }) }),
+  saglikSil: (id: number) => istek(`/saglik/${id}`, { method: 'DELETE' }),
 };
