@@ -242,6 +242,16 @@ export default function DoktorRandevularEkrani({ navigation }: any) {
             </TouchableOpacity>
           )}
 
+          {/* Video görüşme — Online randevularda */}
+          {item.RandevuTipi === 'Online' && (item.Durum === 'Beklemede' || item.Durum === 'Onaylandı') && (
+            <TouchableOpacity
+              style={[styles.akBtn, { backgroundColor: '#dcfce7' }]}
+              onPress={() => navigation.navigate('VideoGorusme', { randevuId: item.RandevuID })}
+            >
+              <Text style={[styles.akBtnYazi, { color: '#16a34a' }]}>📹 Video</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Tıbbi kayıt — tamamlanan veya gelmedi */}
           {(item.Durum === 'Tamamlandı' || item.Durum === 'Gelmedi') && (
             <TouchableOpacity

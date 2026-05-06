@@ -124,6 +124,16 @@ export const api = {
   adminTopluBildirim: (baslik: string, mesaj: string) =>
     istek('/admin/bildirim/toplu', { method: 'POST', body: JSON.stringify({ baslik, mesaj }) }, true),
 
+  // Admin — Verimlilik
+  adminVerimlilik: () => istek('/admin/istatistikler/verimlilik', {}, true),
+
+  // Admin — Yöneticiler
+  adminYoneticiler: () => istek('/admin/yoneticiler', {}, true),
+  adminYoneticiEkle: (data: { ad: string; soyad: string; email: string; sifre: string }) =>
+    istek('/admin/yoneticiler', { method: 'POST', body: JSON.stringify(data) }, true),
+  adminYoneticiSil: (id: number) =>
+    istek(`/admin/yoneticiler/${id}`, { method: 'DELETE' }, true),
+
   // Mesajlaşma
   mesajlar: (randevuId: number) => istek(`/mesajlar/${randevuId}`),
   mesajGonder: (randevuId: number, mesaj: string) =>

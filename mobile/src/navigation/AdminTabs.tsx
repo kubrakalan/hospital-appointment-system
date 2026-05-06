@@ -8,6 +8,8 @@ import AdminDoktorlarEkrani from '../screens/admin/AdminDoktorlarEkrani';
 import AdminHastalarEkrani from '../screens/admin/AdminHastalarEkrani';
 import AdminOdemelerEkrani from '../screens/admin/AdminOdemelerEkrani';
 import AdminDuyuruEkrani from '../screens/admin/AdminDuyuruEkrani';
+import AdminVerimlilikEkrani from '../screens/admin/AdminVerimlilikEkrani';
+import AdminYoneticilerEkrani from '../screens/admin/AdminYoneticilerEkrani';
 
 const Tab = createBottomTabNavigator();
 
@@ -61,6 +63,16 @@ export default function AdminTabs({ navigation }: any) {
         name="Ödemeler"
         component={AdminOdemelerEkrani}
         options={{ tabBarIcon: ({ color }) => <Ikon emj="💳" renk={color} /> }}
+      />
+      <Tab.Screen
+        name="Verimlilik"
+        component={AdminVerimlilikEkrani}
+        options={{ tabBarIcon: ({ color }) => <Ikon emj="📈" renk={color} /> }}
+      />
+      <Tab.Screen
+        name="Yöneticiler"
+        component={AdminYoneticilerEkrani}
+        options={{ tabBarIcon: ({ color }) => <Ikon emj="🛡️" renk={color} /> }}
       />
       <Tab.Screen
         name="Duyuru"
