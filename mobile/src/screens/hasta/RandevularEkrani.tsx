@@ -24,9 +24,18 @@ const DURUM_RENK: Record<string, string> = {
 const TUM_SAATLER = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
 
 function tarihFormatla(tarih: string) {
-  const [yil, ay, gun] = tarih.split('T')[0].split('-');
+  const [yil, ay, gun] = String(tarih).split('T')[0].split('-');
   const aylar = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
   return `${gun} ${aylar[parseInt(ay)-1]} ${yil}`;
+}
+
+function saatFormatla(saat: any): string {
+  if (!saat) return '';
+  const s = String(saat);
+  // "1970-01-01T09:00:00.000Z" → "09:00"
+  if (s.includes('T')) return s.split('T')[1].substring(0, 5);
+  // "09:00:00" → "09:00"
+  return s.substring(0, 5);
 }
 
 function gunFarki(tarih: string) {
@@ -217,7 +226,7 @@ export default function RandevularEkrani({ navigation }: any) {
               </View>
             </View>
             <Text style={[styles.tarih, { color: c.textMuted }]}>
-              📅 {tarihFormatla(item.RandevuTarihi)} · {String(item.RandevuSaati).substring(0, 5)}
+              📅 {tarihFormatla(item.RandevuTarihi)} · {saatFormatla(item.RandevuSaati)}
             </Text>
             <View style={styles.butonlar}>
               {item.RandevuTipi === 'Online' && (item.Durum === 'Beklemede' || item.Durum === 'Onaylandı') && (
@@ -273,7 +282,7 @@ export default function RandevularEkrani({ navigation }: any) {
             </View>
             {yenidenModal && (
               <Text style={{ color: c.textMuted, fontSize: 13, marginBottom: 16 }}>
-                Dr. {yenidenModal.DoktorAdi} — {tarihFormatla(yenidenModal.RandevuTarihi)} · {String(yenidenModal.RandevuSaati).substring(0, 5)}
+                Dr. {yenidenModal.DoktorAdi} — {tarihFormatla(yenidenModal.RandevuTarihi)} · {saatFormatla(yenidenModal.RandevuSaati)}
               </Text>
             )}
             <Text style={[styles.etiket, { color: c.textMuted }]}>Yeni Tarih (YYYY-AA-GG)</Text>
