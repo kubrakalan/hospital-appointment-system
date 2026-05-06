@@ -92,6 +92,8 @@ export const api = {
   doktorCalismaSaatleri: () => istek('/doktor/calisma-saatleri'),
   doktorCalismaSaatleriGuncelle: (saatler: { gun: string; baslangicSaat: string; bitisSaat: string }[]) =>
     istek('/doktor/calisma-saatleri', { method: 'PUT', body: JSON.stringify({ saatler }) }),
+  doktorHastalar: () => istek('/doktor/hastalar'),
+  doktorHastaRandevular: (hastaId: number) => istek(`/doktor/hastalar/${hastaId}/randevular`),
 
   // Admin
   adminIstatistikler: () => istek('/admin/istatistikler', {}, true),

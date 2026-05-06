@@ -378,4 +378,72 @@ router.get('/istatistikler', async (req, res) => {
   }
 });
 
+// ============================================================
+// GET /api/doktor/hastalar — doktorun randevu geçmişi olan hastalar
+// ============================================================
+router.get('/hastalar', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT
+          h.HastaID,
+          k.Ad + ' ' + k.Soyad                                                       AS HastaAdi,
+          k.Email,
+          COUNT(r.RandevuID)                                                          AS ToplamRandevu,
+          SUM(CASE WHEN r.Durum = 'Tamamlandı' THEN 1 ELSE 0 END)                   AS Tamamlanan,
+          CONVERT(varchar(10), MAX(r.RandevuTarihi), 23)                             AS SonRandevu
+        FROM Randevular r
+        JOIN Doktorlar d   ON r.DoktorID   = d.DoktorID
+        JOIN Hastalar h    ON r.HastaID    = h.HastaID
+        JOIN Kullaniciler k ON h.KullaniciID = k.KullaniciID
+        WHERE d.KullaniciID = @kullaniciId
+        GROUP BY h.HastaID, k.Ad, k.Soyad, k.Email
+        ORDER BY SonRandevu DESC
+      `);
+    res.json(sonuc.recordset);
+  } catch (err) {
+    logger.error(`Doktor hasta listesi hatası | kullaniciId=${req.kullanici?.kullaniciId} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
+// GET /api/doktor/hastalar/:id/randevular — hastanın bu doktorla randevuları
+// ============================================================
+router.get('/hastalar/:id/randevular', async (req, res) => {
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).json({ hata: 'Geçersiz hasta ID' });
+  }
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('hastaId', sql.Int, req.params.id)
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT
+          r.RandevuID,
+          CONVERT(varchar(10), r.RandevuTarihi, 23)          AS RandevuTarihi,
+          LEFT(CONVERT(varchar(8), r.RandevuSaati, 108), 5)  AS RandevuSaati,
+          r.Durum,
+          ISNULL(r.RandevuTipi, 'Hastane')                   AS RandevuTipi,
+          r.Notlar,
+          tb.Tani,
+          tb.Recete,
+          tb.UygulananIslem,
+          tb.SonrakiKontrol
+        FROM Randevular r
+        JOIN Doktorlar d   ON r.DoktorID   = d.DoktorID
+        LEFT JOIN TibbiBilgiler tb ON r.RandevuID = tb.RandevuID
+        WHERE d.KullaniciID = @kullaniciId AND r.HastaID = @hastaId
+        ORDER BY r.RandevuTarihi DESC, r.RandevuSaati DESC
+      `);
+    res.json(sonuc.recordset);
+  } catch (err) {
+    logger.error(`Doktor hasta randevuları hatası | hastaId=${req.params.id} kullaniciId=${req.kullanici?.kullaniciId} hata="${err.message}"`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
 module.exports = router;

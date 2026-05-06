@@ -4,6 +4,8 @@ import {
   Alert, RefreshControl, Modal, ScrollView,
   TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { api } from '../../api';
 import { useTheme } from '../../ThemeContext';
 import { KartSkeleton } from '../../components/Skeleton';
@@ -15,43 +17,44 @@ interface Randevu {
   RandevuSaati: string;
   Durum: string;
   Notlar?: string;
+  RandevuTipi?: string;
 }
 
 interface TibbiBilgi {
   Tani: string; UygulananIslem: string; Recete: string;
-  LabNotu: string; SonrakiKontrol: string;
+  LabNotu: string; DoktorNotu: string; SonrakiKontrol: string;
 }
 
 const DURUM_RENK: Record<string, string> = {
-  'Beklemede': '#f59e0b', 'Onaylandı': '#10b981',
-  'Tamamlandı': '#6b7280', 'İptal': '#ef4444', 'Gelmedi': '#f97316',
+  Beklemede: '#f59e0b', Onaylandı: '#10b981',
+  Tamamlandı: '#6b7280', İptal: '#ef4444', Gelmedi: '#f97316',
 };
 
-const bosForm: TibbiBilgi = { Tani: '', UygulananIslem: '', Recete: '', LabNotu: '', SonrakiKontrol: '' };
+const bosForm: TibbiBilgi = {
+  Tani: '', UygulananIslem: '', Recete: '',
+  LabNotu: '', DoktorNotu: '', SonrakiKontrol: '',
+};
 
 const GUN_KISALTMA = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 function tarihFormatla(tarih: string) {
   const [yil, ay, gun] = tarih.split('T')[0].split('-');
-  const aylar = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-  return `${gun} ${aylar[parseInt(ay)-1]} ${yil}`;
+  const aylar = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  return `${gun} ${aylar[parseInt(ay) - 1]} ${yil}`;
 }
 
-function haftaGunleri(haftaBase: Date): Date[] {
-  const days: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(haftaBase);
-    d.setDate(haftaBase.getDate() + i);
-    days.push(d);
-  }
-  return days;
+function haftaGunleri(base: Date): Date[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    return d;
+  });
 }
 
 function haftaBaslangici(ref: Date): Date {
   const d = new Date(ref);
-  const gun = d.getDay(); // 0=Pazar
-  const fark = gun === 0 ? -6 : 1 - gun;
-  d.setDate(d.getDate() + fark);
+  const gun = d.getDay();
+  d.setDate(d.getDate() + (gun === 0 ? -6 : 1 - gun));
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -60,7 +63,34 @@ function tarihStr(d: Date) {
   return d.toISOString().split('T')[0];
 }
 
-export default function DoktorRandevularEkrani() {
+async function recetePdf(randevu: Randevu, bilgi: TibbiBilgi) {
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <style>
+    body{font-family:Arial,sans-serif;padding:40px;color:#111}
+    h1{color:#10b981;border-bottom:2px solid #10b981;padding-bottom:10px}
+    .alan{margin-bottom:18px} .etiket{font-size:12px;color:#6b7280;font-weight:bold;margin-bottom:4px}
+    .deger{font-size:14px;color:#111;white-space:pre-wrap}
+    .footer{margin-top:40px;border-top:1px solid #e5e7eb;padding-top:12px;font-size:11px;color:#9ca3af}
+  </style></head><body>
+  <h1>🏥 E-Reçete</h1>
+  <div class="alan"><div class="etiket">Hasta</div><div class="deger">${randevu.HastaAdi}</div></div>
+  <div class="alan"><div class="etiket">Tarih</div><div class="deger">${tarihFormatla(randevu.RandevuTarihi)}</div></div>
+  ${bilgi.Tani ? `<div class="alan"><div class="etiket">Tanı</div><div class="deger">${bilgi.Tani}</div></div>` : ''}
+  ${bilgi.UygulananIslem ? `<div class="alan"><div class="etiket">Uygulanan İşlem</div><div class="deger">${bilgi.UygulananIslem}</div></div>` : ''}
+  ${bilgi.Recete ? `<div class="alan"><div class="etiket">Reçete / İlaçlar</div><div class="deger">${bilgi.Recete}</div></div>` : ''}
+  ${bilgi.LabNotu ? `<div class="alan"><div class="etiket">Lab / Tahlil</div><div class="deger">${bilgi.LabNotu}</div></div>` : ''}
+  ${bilgi.SonrakiKontrol ? `<div class="alan"><div class="etiket">Sonraki Kontrol</div><div class="deger">${bilgi.SonrakiKontrol}</div></div>` : ''}
+  <div class="footer">MediRandevu Hastane Bilgi Sistemi · ${new Date().toLocaleDateString('tr-TR')}</div>
+  </body></html>`;
+  try {
+    const { uri } = await Print.printToFileAsync({ html });
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'E-Reçete PDF' });
+  } catch (e: any) {
+    Alert.alert('Hata', e.message);
+  }
+}
+
+export default function DoktorRandevularEkrani({ navigation }: any) {
   const { c } = useTheme();
   const [randevular, setRandevular] = useState<Randevu[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -71,6 +101,9 @@ export default function DoktorRandevularEkrani() {
   const [seciliRandevu, setSeciliRandevu] = useState<Randevu | null>(null);
   const [tibbiBilgi, setTibbiBilgi] = useState<TibbiBilgi>(bosForm);
   const [kaydediyor, setKaydediyor] = useState(false);
+  const [pdfYukleniyor, setPdfYukleniyor] = useState(false);
+  // Her kart için ayrı loading: randevuId → yükleniyorMu
+  const [durumYukleniyor, setDurumYukleniyor] = useState<Record<number, boolean>>({});
 
   const yukle = useCallback(async () => {
     try {
@@ -83,24 +116,26 @@ export default function DoktorRandevularEkrani() {
   useEffect(() => { yukle(); }, [yukle]);
 
   async function durumGuncelle(id: number, yeniDurum: string) {
+    setDurumYukleniyor(prev => ({ ...prev, [id]: true }));
     try {
       await api.doktorRandevuDurum(id, yeniDurum);
       setRandevular(prev => prev.map(r => r.RandevuID === id ? { ...r, Durum: yeniDurum } : r));
     } catch (err: any) { Alert.alert('Hata', err.message); }
+    finally { setDurumYukleniyor(prev => ({ ...prev, [id]: false })); }
   }
 
   function durumSecenekleri(durum: string, id: number) {
     if (durum === 'Beklemede') {
       Alert.alert('Durum Güncelle', 'Randevu durumunu değiştir:', [
-        { text: 'Onayla', onPress: () => durumGuncelle(id, 'Onaylandı') },
-        { text: 'İptal Et', style: 'destructive', onPress: () => durumGuncelle(id, 'İptal') },
+        { text: '✅ Onayla', onPress: () => durumGuncelle(id, 'Onaylandı') },
+        { text: '❌ İptal Et', style: 'destructive', onPress: () => durumGuncelle(id, 'İptal') },
         { text: 'Vazgeç', style: 'cancel' },
       ]);
     } else if (durum === 'Onaylandı') {
       Alert.alert('Durum Güncelle', 'Randevu durumunu değiştir:', [
-        { text: 'Tamamlandı', onPress: () => durumGuncelle(id, 'Tamamlandı') },
-        { text: 'Gelmedi', onPress: () => durumGuncelle(id, 'Gelmedi') },
-        { text: 'İptal Et', style: 'destructive', onPress: () => durumGuncelle(id, 'İptal') },
+        { text: '✅ Tamamlandı', onPress: () => durumGuncelle(id, 'Tamamlandı') },
+        { text: '🚫 Gelmedi', onPress: () => durumGuncelle(id, 'Gelmedi') },
+        { text: '❌ İptal Et', style: 'destructive', onPress: () => durumGuncelle(id, 'İptal') },
         { text: 'Vazgeç', style: 'cancel' },
       ]);
     }
@@ -117,6 +152,7 @@ export default function DoktorRandevularEkrani() {
           UygulananIslem: mevcut.UygulananIslem ?? '',
           Recete: mevcut.Recete ?? '',
           LabNotu: mevcut.LabNotu ?? '',
+          DoktorNotu: mevcut.DoktorNotu ?? '',
           SonrakiKontrol: mevcut.SonrakiKontrol ? mevcut.SonrakiKontrol.split('T')[0] : '',
         });
       }
@@ -132,15 +168,15 @@ export default function DoktorRandevularEkrani() {
         uygulananIslem: tibbiBilgi.UygulananIslem || undefined,
         recete: tibbiBilgi.Recete || undefined,
         labNotu: tibbiBilgi.LabNotu || undefined,
+        doktorNotu: tibbiBilgi.DoktorNotu || undefined,
         sonrakiKontrol: tibbiBilgi.SonrakiKontrol || undefined,
       });
-      Alert.alert('Başarılı', 'Tıbbi kayıt kaydedildi.');
+      Alert.alert('✅ Kaydedildi', 'Tıbbi kayıt başarıyla kaydedildi.');
       setSeciliRandevu(null);
     } catch (err: any) { Alert.alert('Hata', err.message); }
     finally { setKaydediyor(false); }
   }
 
-  // Takvim yardımcıları
   const gunluk = haftaGunleri(haftaBase);
 
   function randevuSayisiGun(tarih: string) {
@@ -156,6 +192,8 @@ export default function DoktorRandevularEkrani() {
   });
 
   function RandevuKart({ item }: { item: Randevu }) {
+    const yukl = durumYukleniyor[item.RandevuID];
+    const durumRenk = DURUM_RENK[item.Durum] ?? '#9ca3af';
     return (
       <View style={[styles.kart, { backgroundColor: c.card }]}>
         <View style={styles.kartUst}>
@@ -164,23 +202,47 @@ export default function DoktorRandevularEkrani() {
             <Text style={[styles.tarih, { color: c.textMuted }]}>
               📅 {tarihFormatla(item.RandevuTarihi)} · {String(item.RandevuSaati).substring(0, 5)}
             </Text>
+            {item.RandevuTipi ? (
+              <Text style={[styles.tipYazi, { color: c.textFaint }]}>🏥 {item.RandevuTipi}</Text>
+            ) : null}
             {item.Notlar ? (
-              <Text style={[styles.notYazi, { color: c.textFaint }]}>💬 {item.Notlar}</Text>
+              <Text style={[styles.notYazi, { color: c.textFaint }]} numberOfLines={2}>💬 {item.Notlar}</Text>
             ) : null}
           </View>
-          <View style={[styles.durumEtiket, { backgroundColor: DURUM_RENK[item.Durum] ?? '#9ca3af' }]}>
-            <Text style={styles.durumYazi}>{item.Durum}</Text>
+          <View style={[styles.durumEtiket, { backgroundColor: durumRenk + '20' }]}>
+            <Text style={[styles.durumYazi, { color: durumRenk }]}>{item.Durum}</Text>
           </View>
         </View>
+
         <View style={[styles.aksiyon, { borderTopColor: c.border }]}>
+          {/* Durum değiştirme butonu */}
           {(item.Durum === 'Beklemede' || item.Durum === 'Onaylandı') && (
             <TouchableOpacity
-              style={[styles.akBtn, { backgroundColor: '#dcfce7' }]}
+              style={[styles.akBtn, { backgroundColor: '#dcfce7', opacity: yukl ? 0.6 : 1 }]}
               onPress={() => durumSecenekleri(item.Durum, item.RandevuID)}
+              disabled={yukl}
             >
-              <Text style={[styles.akBtnYazi, { color: '#15803d' }]}>Durum</Text>
+              {yukl
+                ? <ActivityIndicator size="small" color="#15803d" />
+                : <Text style={[styles.akBtnYazi, { color: '#15803d' }]}>⚙️ Durum</Text>
+              }
             </TouchableOpacity>
           )}
+
+          {/* Mesaj butonu — aktif randevularda */}
+          {(item.Durum === 'Beklemede' || item.Durum === 'Onaylandı') && (
+            <TouchableOpacity
+              style={[styles.akBtn, { backgroundColor: '#dbeafe' }]}
+              onPress={() => navigation.navigate('Mesajlasma', {
+                randevuId: item.RandevuID,
+                karsiAd: item.HastaAdi,
+              })}
+            >
+              <Text style={[styles.akBtnYazi, { color: '#1d4ed8' }]}>💬 Mesaj</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Tıbbi kayıt — tamamlanan veya gelmedi */}
           {(item.Durum === 'Tamamlandı' || item.Durum === 'Gelmedi') && (
             <TouchableOpacity
               style={[styles.akBtn, { backgroundColor: '#ede9fe' }]}
@@ -214,13 +276,10 @@ export default function DoktorRandevularEkrani() {
       {/* Takvim görünümü */}
       {gorunu === 'takvim' && (
         <View style={[styles.takvimKapsayici, { backgroundColor: c.card, borderBottomColor: c.border }]}>
-          {/* Hafta navigasyon */}
           <View style={styles.haftaNav}>
             <TouchableOpacity
               onPress={() => {
-                const yeni = new Date(haftaBase);
-                yeni.setDate(haftaBase.getDate() - 7);
-                setHaftaBase(yeni);
+                const y = new Date(haftaBase); y.setDate(y.getDate() - 7); setHaftaBase(y);
               }}
               style={styles.haftaOk}
             >
@@ -231,17 +290,13 @@ export default function DoktorRandevularEkrani() {
             </Text>
             <TouchableOpacity
               onPress={() => {
-                const yeni = new Date(haftaBase);
-                yeni.setDate(haftaBase.getDate() + 7);
-                setHaftaBase(yeni);
+                const y = new Date(haftaBase); y.setDate(y.getDate() + 7); setHaftaBase(y);
               }}
               style={styles.haftaOk}
             >
               <Text style={[styles.haftaOkYazi, { color: c.text }]}>›</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Günler */}
           <View style={styles.gunlerSatir}>
             {gunluk.map((gun, i) => {
               const str = tarihStr(gun);
@@ -251,10 +306,7 @@ export default function DoktorRandevularEkrani() {
               return (
                 <TouchableOpacity
                   key={i}
-                  style={[
-                    styles.gunKutu,
-                    secili && { backgroundColor: '#10b981', borderRadius: 10 },
-                  ]}
+                  style={[styles.gunKutu, secili && { backgroundColor: '#10b981', borderRadius: 10 }]}
                   onPress={() => setSeciliGun(str)}
                 >
                   <Text style={[styles.gunKisalt, { color: secili ? '#fff' : c.textFaint }]}>
@@ -282,7 +334,7 @@ export default function DoktorRandevularEkrani() {
       {/* Liste */}
       {yukleniyor ? (
         <ScrollView contentContainerStyle={{ padding: 16 }}>
-          {[1,2,3].map(i => <KartSkeleton key={i} />)}
+          {[1, 2, 3].map(i => <KartSkeleton key={i} />)}
         </ScrollView>
       ) : (
         <FlatList
@@ -316,10 +368,10 @@ export default function DoktorRandevularEkrani() {
         >
           <View style={[styles.modalHeader, { backgroundColor: c.card, borderBottomColor: c.border }]}>
             <TouchableOpacity onPress={() => setSeciliRandevu(null)}>
-              <Text style={{ color: '#0ea5e9', fontSize: 15 }}>İptal</Text>
+              <Text style={{ color: '#ef4444', fontSize: 15 }}>Kapat</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-              <Text style={[styles.modalBaslik, { color: c.text }]}>Tıbbi Kayıt</Text>
+              <Text style={[styles.modalBaslik, { color: c.text }]}>🩺 Tıbbi Kayıt</Text>
               {seciliRandevu && (
                 <Text style={[styles.modalAlt, { color: c.textMuted }]}>
                   {seciliRandevu.HastaAdi} · {tarihFormatla(seciliRandevu.RandevuTarihi)}
@@ -334,18 +386,19 @@ export default function DoktorRandevularEkrani() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }}>
+          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
             {[
               { alan: 'Tani', label: '🔬 Tanı', multi: true },
               { alan: 'UygulananIslem', label: '🩺 Uygulanan İşlem', multi: true },
-              { alan: 'Recete', label: '💊 Reçete', multi: true },
+              { alan: 'Recete', label: '💊 Reçete / İlaçlar', multi: true },
               { alan: 'LabNotu', label: '🧪 Lab / Tahlil Notu', multi: true },
+              { alan: 'DoktorNotu', label: '📝 Doktor Notu (gizli)', multi: true },
               { alan: 'SonrakiKontrol', label: '📅 Sonraki Kontrol (YYYY-AA-GG)', multi: false },
             ].map(({ alan, label, multi }) => (
-              <View key={alan}>
+              <View key={alan} style={{ marginBottom: 14 }}>
                 <Text style={[styles.etiket, { color: c.textMuted }]}>{label}</Text>
                 <TextInput
-                  style={girdi(multi ? { height: 80, textAlignVertical: 'top' } : {})}
+                  style={girdi(multi ? { minHeight: 80, textAlignVertical: 'top' } : {})}
                   value={(tibbiBilgi as any)[alan]}
                   onChangeText={v => setTibbiBilgi(f => ({ ...f, [alan]: v }))}
                   placeholder={label.replace(/^[^ ]+ /, '')}
@@ -356,6 +409,25 @@ export default function DoktorRandevularEkrani() {
                 />
               </View>
             ))}
+
+            {/* E-Reçete PDF butonu */}
+            {seciliRandevu && (
+              <TouchableOpacity
+                style={[styles.pdfButon, pdfYukleniyor && { opacity: 0.6 }]}
+                onPress={async () => {
+                  if (!seciliRandevu) return;
+                  setPdfYukleniyor(true);
+                  await recetePdf(seciliRandevu, tibbiBilgi);
+                  setPdfYukleniyor(false);
+                }}
+                disabled={pdfYukleniyor}
+              >
+                {pdfYukleniyor
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.pdfButonYazi}>📄 E-Reçete PDF Oluştur</Text>
+                }
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
@@ -369,10 +441,7 @@ const styles = StyleSheet.create({
   bos: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   bosEmoji: { fontSize: 48, marginBottom: 12 },
   bosYazi: { fontSize: 15 },
-  gorunuBar: {
-    flexDirection: 'row', padding: 8, gap: 8,
-    borderBottomWidth: 1,
-  },
+  gorunuBar: { flexDirection: 'row', padding: 8, gap: 8, borderBottomWidth: 1 },
   gorunuBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
   gorunuYazi: { fontSize: 13, fontWeight: '700' },
   takvimKapsayici: { borderBottomWidth: 1, paddingBottom: 12 },
@@ -384,10 +453,7 @@ const styles = StyleSheet.create({
   gunKutu: { flex: 1, alignItems: 'center', paddingVertical: 6, gap: 4 },
   gunKisalt: { fontSize: 10, fontWeight: '600' },
   gunSayi: { fontSize: 15, fontWeight: '600' },
-  nokta: {
-    width: 18, height: 18, borderRadius: 9,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  nokta: { width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
   noktaYazi: { fontSize: 9, fontWeight: '700' },
   kart: {
     borderRadius: 14, padding: 16, marginBottom: 12,
@@ -396,11 +462,12 @@ const styles = StyleSheet.create({
   kartUst: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   hastaAd: { fontSize: 15, fontWeight: '700', marginBottom: 3 },
   tarih: { fontSize: 13 },
-  notYazi: { fontSize: 12, marginTop: 5, fontStyle: 'italic' },
-  durumEtiket: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3 },
-  durumYazi: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  aksiyon: { flexDirection: 'row', gap: 8, paddingTop: 10, borderTopWidth: 1 },
-  akBtn: { flex: 1, borderRadius: 8, padding: 9, alignItems: 'center' },
+  tipYazi: { fontSize: 12, marginTop: 3 },
+  notYazi: { fontSize: 12, marginTop: 4, fontStyle: 'italic' },
+  durumEtiket: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  durumYazi: { fontSize: 11, fontWeight: '700' },
+  aksiyon: { flexDirection: 'row', gap: 8, paddingTop: 10, borderTopWidth: 1, flexWrap: 'wrap' },
+  akBtn: { flex: 1, borderRadius: 8, padding: 9, alignItems: 'center', minWidth: 90 },
   akBtnYazi: { fontWeight: '600', fontSize: 13 },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -410,4 +477,9 @@ const styles = StyleSheet.create({
   modalAlt: { fontSize: 11, marginTop: 2 },
   etiket: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
   girdi: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 14 },
+  pdfButon: {
+    backgroundColor: '#7c3aed', borderRadius: 12, padding: 14,
+    alignItems: 'center', marginTop: 8,
+  },
+  pdfButonYazi: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
