@@ -24,8 +24,8 @@ router.get('/benim', async (req, res) => {
       .query(`
         SELECT
           r.RandevuID,
-          r.RandevuTarihi,
-          r.RandevuSaati,
+          CONVERT(varchar(10), r.RandevuTarihi, 23)         AS RandevuTarihi,
+          LEFT(CONVERT(varchar(8), r.RandevuSaati, 108), 5) AS RandevuSaati,
           r.Durum,
           r.Notlar,
           ISNULL(r.RandevuTipi, 'Hastane') AS RandevuTipi,
