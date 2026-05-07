@@ -279,7 +279,7 @@ export default function RandevuAlEkrani() {
             const secili = tarih === deger;
             const doluSayisi = gunDoluluk[deger] ?? -1;
             const dotRenk = doluSayisi < 0 ? 'transparent'
-              : doluSayisi >= TUM_SAATLER.length ? '#ef4444'
+              : doluSayisi >= TUM_OLASI_SAATLER.length ? '#ef4444'
               : doluSayisi >= 4 ? '#f59e0b' : '#10b981';
             return (
               <TouchableOpacity
