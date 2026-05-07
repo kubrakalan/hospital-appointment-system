@@ -11,10 +11,17 @@ interface Ozet {
   iptalEdilen: number; gelmedi: number; benzersizHasta: number;
   bugun: number; son30Gun: number; onaylandi: number;
 }
+interface Kazanc {
+  toplamKazanc: number;
+  buAyKazanc: number;
+  odemeSayisi: number;
+  ortalamaUcret: number;
+}
 interface Istatistik {
   ozet: Ozet;
   aylik: { ay: string; sayi: number; tamamlanan: number }[];
   topHastalar: { hastaAdi: string; randevuSayisi: number }[];
+  kazanc?: Kazanc;
 }
 
 export default function DoktorIstatistikEkrani() {
@@ -146,6 +153,41 @@ export default function DoktorIstatistikEkrani() {
         </View>
       )}
 
+      {/* Kazanç özeti */}
+      {istatistik.kazanc !== undefined && (
+        <View style={[styles.bolum, { backgroundColor: c.card }]}>
+          <Text style={[styles.bolumBaslik, { color: c.text }]}>💰 Kazanç Özeti</Text>
+          <View style={[styles.kazancBanner, { backgroundColor: '#10b98112' }]}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={[styles.kazancSayi, { color: '#10b981' }]}>
+                ₺{Math.round(istatistik.kazanc.toplamKazanc).toLocaleString('tr-TR')}
+              </Text>
+              <Text style={[styles.kazancEtiket, { color: c.textMuted }]}>Toplam Kazanç</Text>
+            </View>
+            <View style={[styles.kazancAyrac, { backgroundColor: c.border }]} />
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={[styles.kazancSayi, { color: '#6366f1' }]}>
+                ₺{Math.round(istatistik.kazanc.buAyKazanc).toLocaleString('tr-TR')}
+              </Text>
+              <Text style={[styles.kazancEtiket, { color: c.textMuted }]}>Bu Ay</Text>
+            </View>
+          </View>
+          <View style={[styles.kazancAltSatir, { borderTopColor: c.border }]}>
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={[styles.kazancAltSayi, { color: c.text }]}>{istatistik.kazanc.odemeSayisi}</Text>
+              <Text style={[styles.kazancAltEtiket, { color: c.textMuted }]}>Ödenen Randevu</Text>
+            </View>
+            <View style={[styles.kazancAyrac, { backgroundColor: c.border }]} />
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={[styles.kazancAltSayi, { color: c.text }]}>
+                ₺{Math.round(istatistik.kazanc.ortalamaUcret).toLocaleString('tr-TR')}
+              </Text>
+              <Text style={[styles.kazancAltEtiket, { color: c.textMuted }]}>Ortalama / Randevu</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Top hastalar */}
       {topHastalar.length > 0 && (
         <View style={[styles.bolum, { backgroundColor: c.card }]}>
@@ -204,4 +246,12 @@ const styles = StyleSheet.create({
   hastaNo: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   hastaAd: { flex: 1, fontSize: 14 },
   hastaSayi: { fontSize: 12 },
+
+  kazancBanner: { flexDirection: 'row', borderRadius: 12, padding: 16, marginBottom: 12 },
+  kazancSayi: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  kazancEtiket: { fontSize: 12, fontWeight: '500' },
+  kazancAyrac: { width: 1, marginHorizontal: 8 },
+  kazancAltSatir: { flexDirection: 'row', paddingTop: 12, borderTopWidth: 1 },
+  kazancAltSayi: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  kazancAltEtiket: { fontSize: 11, fontWeight: '500' },
 });

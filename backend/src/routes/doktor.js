@@ -367,10 +367,28 @@ router.get('/istatistikler', async (req, res) => {
         ORDER BY randevuSayisi DESC
       `);
 
+    // Kazanç özeti (Odemeler tablosundan)
+    const kazanc = await pool.request()
+      .input('kullaniciId', sql.Int, req.kullanici.kullaniciId)
+      .query(`
+        SELECT
+          ISNULL(SUM(o.Tutar), 0)                                                                AS toplamKazanc,
+          ISNULL(SUM(CASE WHEN MONTH(o.OdemeTarihi) = MONTH(GETDATE())
+                           AND YEAR(o.OdemeTarihi)  = YEAR(GETDATE())
+                      THEN o.Tutar ELSE 0 END), 0)                                               AS buAyKazanc,
+          COUNT(o.OdemeID)                                                                        AS odemeSayisi,
+          ISNULL(AVG(CAST(o.Tutar AS FLOAT)), 0)                                                 AS ortalamaUcret
+        FROM Odemeler o
+        JOIN Randevular r ON o.RandevuID = r.RandevuID
+        JOIN Doktorlar d  ON r.DoktorID  = d.DoktorID
+        WHERE d.KullaniciID = @kullaniciId AND o.Durum = N'Ödendi'
+      `);
+
     res.json({
       ozet: sonuc.recordset[0],
       aylik: aylik.recordset,
       topHastalar: topHastalar.recordset,
+      kazanc: kazanc.recordset[0],
     });
   } catch (err) {
     logger.error(`Doktor istatistik hatası | kullaniciId=${req.kullanici?.kullaniciId} hata="${err.message}"`);

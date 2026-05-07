@@ -125,17 +125,44 @@ export default function DoktorAnaSayfaEkrani({ navigation }: any) {
 
       {/* Özet sayı kartları */}
       <View style={styles.ozetSatir}>
-        {[
-          { etiket: 'Bugün', sayi: ozet?.bugun ?? 0, renk: '#10b981' },
-          { etiket: 'Bekleyen', sayi: ozet?.bekleyen ?? 0, renk: '#f59e0b' },
-          { etiket: 'Hasta', sayi: ozet?.benzersizHasta ?? 0, renk: '#6366f1' },
-          { etiket: 'Tamamlanan', sayi: ozet?.tamamlanan ?? 0, renk: '#0ea5e9' },
-        ].map(item => (
-          <View key={item.etiket} style={[styles.ozetKart, { backgroundColor: c.card }]}>
-            <Text style={[styles.ozetSayi, { color: item.renk }]}>{item.sayi}</Text>
-            <Text style={[styles.ozetEtiket, { color: c.textMuted }]}>{item.etiket}</Text>
-          </View>
-        ))}
+        {(() => {
+          const toplam = ozet?.toplamRandevu ?? 0;
+          const tamamlananOran = toplam > 0 ? Math.round(((ozet?.tamamlanan ?? 0) / toplam) * 100) : 0;
+          const iptalOran = toplam > 0 ? Math.round(((ozet?.iptalEdilen ?? 0) / toplam) * 100) : 0;
+          return [
+            {
+              emj: '📅', etiket: 'Bugün', sayi: ozet?.bugun ?? 0, renk: '#10b981',
+              alt: `${ozet?.son30Gun ?? 0} son 30 gün`,
+            },
+            {
+              emj: '⏳', etiket: 'Bekleyen', sayi: ozet?.bekleyen ?? 0, renk: '#f59e0b',
+              alt: `${ozet?.onaylandi ?? 0} onaylı`,
+            },
+            {
+              emj: '👥', etiket: 'Toplam Hasta', sayi: ozet?.benzersizHasta ?? 0, renk: '#6366f1',
+              alt: `${toplam} randevu`,
+            },
+            {
+              emj: '✅', etiket: 'Tamamlanan', sayi: ozet?.tamamlanan ?? 0, renk: '#0ea5e9',
+              alt: `%${tamamlananOran} oran`,
+            },
+            {
+              emj: '❌', etiket: 'İptal', sayi: ozet?.iptalEdilen ?? 0, renk: '#ef4444',
+              alt: `%${iptalOran} oran`,
+            },
+            {
+              emj: '🚫', etiket: 'Gelmedi', sayi: ozet?.gelmedi ?? 0, renk: '#f97316',
+              alt: 'toplam',
+            },
+          ].map(item => (
+            <View key={item.etiket} style={[styles.ozetKart, { backgroundColor: c.card, borderTopColor: item.renk }]}>
+              <Text style={{ fontSize: 18, marginBottom: 4 }}>{item.emj}</Text>
+              <Text style={[styles.ozetSayi, { color: item.renk }]}>{item.sayi}</Text>
+              <Text style={[styles.ozetEtiket, { color: c.textMuted }]}>{item.etiket}</Text>
+              <Text style={[styles.ozetAlt, { color: c.textFaint }]}>{item.alt}</Text>
+            </View>
+          ));
+        })()}
       </View>
 
       {/* Bugünkü program */}
@@ -285,10 +312,11 @@ const styles = StyleSheet.create({
   selamAd: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 2 },
   selamTarih: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 6 },
 
-  ozetSatir: { flexDirection: 'row', gap: 10, marginBottom: 22 },
-  ozetKart: { flex: 1, borderRadius: 14, padding: 12, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3 },
-  ozetSayi: { fontSize: 22, fontWeight: '800' },
-  ozetEtiket: { fontSize: 10, fontWeight: '600', marginTop: 4, textAlign: 'center' },
+  ozetSatir: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 22 },
+  ozetKart: { width: '30%', borderRadius: 14, padding: 12, alignItems: 'center', borderTopWidth: 3, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3 },
+  ozetSayi: { fontSize: 20, fontWeight: '800' },
+  ozetEtiket: { fontSize: 10, fontWeight: '600', marginTop: 2, textAlign: 'center' },
+  ozetAlt: { fontSize: 10, marginTop: 2, textAlign: 'center' },
 
   bolumBaslik: { fontSize: 15, fontWeight: '700', marginBottom: 12, marginTop: 6 },
 

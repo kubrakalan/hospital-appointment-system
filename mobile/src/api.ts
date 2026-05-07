@@ -51,6 +51,7 @@ export const api = {
     return istek(`/randevular/doktorlar${q ? '?' + q : ''}`);
   },
   doktorProfil: (doktorId: number) => istek(`/randevular/doktor/${doktorId}`),
+  doktorCalismaSaatleriPublic: (doktorId: number) => istek(`/randevular/doktor/${doktorId}/calisma-saatleri`),
   doluSaatler: (doktorId: number, tarih: string) =>
     istek(`/randevular/dolu-saatler?doktorId=${doktorId}&tarih=${tarih}`),
   tibbiBilgiHasta: (randevuId: number) => istek(`/randevular/${randevuId}/tibbi-kayit`),

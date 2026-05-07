@@ -16,7 +16,36 @@ interface DoktorProfil extends Doktor {
   degerlendirmeler: { Puan: number; Yorum: string | null; HastaAdi: string }[];
 }
 
-const TUM_SAATLER = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
+// Tüm olası saatler (07:00–19:00 arası 30dk aralıklı)
+const TUM_OLASI_SAATLER = Array.from({ length: 25 }, (_, i) => {
+  const saat = Math.floor(i / 2) + 7;
+  const dakika = i % 2 === 0 ? '00' : '30';
+  return `${String(saat).padStart(2, '0')}:${dakika}`;
+});
+
+interface CalismaSaati {
+  Gun: string; BaslangicSaat: string; BitisSaat: string;
+}
+
+// Türkçe gün adı → programdaki gün anahtarı eşleştirmesi
+const GUN_MAP: Record<string, string> = {
+  'Pazartesi': 'Pazartesi', 'Salı': 'Salı', 'Çarşamba': 'Çarşamba',
+  'Perşembe': 'Perşembe', 'Cuma': 'Cuma', 'Cumartesi': 'Cumartesi', 'Pazar': 'Pazar',
+};
+const JS_GUN_MAP: Record<number, string> = {
+  0: 'Pazar', 1: 'Pazartesi', 2: 'Salı', 3: 'Çarşamba',
+  4: 'Perşembe', 5: 'Cuma', 6: 'Cumartesi',
+};
+
+function uygunSaatleriHesapla(calismaSaatleri: CalismaSaati[], tarih: string): string[] {
+  if (!tarih || calismaSaatleri.length === 0) return [];
+  const gunAdi = JS_GUN_MAP[new Date(tarih + 'T00:00:00').getDay()];
+  const calisma = calismaSaatleri.find(c => c.Gun === gunAdi);
+  if (!calisma) return [];
+  const bas = calisma.BaslangicSaat?.substring(0, 5) ?? '09:00';
+  const bit = calisma.BitisSaat?.substring(0, 5) ?? '17:00';
+  return TUM_OLASI_SAATLER.filter(s => s >= bas && s < bit);
+}
 
 
 function YildizPuan({ puan }: { puan: number }) {
@@ -41,6 +70,7 @@ export default function RandevuAlEkrani() {
   const [doluSaatler, setDoluSaatler] = useState<string[]>([]);
   const [saatYukleniyor, setSaatYukleniyor] = useState(false);
   const [gunDoluluk, setGunDoluluk] = useState<Record<string, number>>({});
+  const [calismaSaatleri, setCalismaSaatleri] = useState<CalismaSaati[]>([]);
 
   // Doktor profil modal
   const [profilModal, setProfilModal] = useState<DoktorProfil | null>(null);
@@ -59,17 +89,13 @@ export default function RandevuAlEkrani() {
     aramaRef.current = setTimeout(() => yukleDoktorlar(uzmanlik, adArama), 350);
   }, [adArama, uzmanlik]);
 
+  // Doktor seçilince çalışma saatlerini çek
   useEffect(() => {
-    if (!seciliDoktor || !tarih) { setDoluSaatler([]); setSaat(''); return; }
-    setSaatYukleniyor(true); setSaat('');
-    api.doluSaatler(seciliDoktor.DoktorID, tarih)
-      .then((d: string[]) => setDoluSaatler(Array.isArray(d) ? d : []))
-      .catch(() => setDoluSaatler([]))
-      .finally(() => setSaatYukleniyor(false));
-  }, [seciliDoktor, tarih]);
+    if (!seciliDoktor) { setCalismaSaatleri([]); setGunDoluluk({}); return; }
+    api.doktorCalismaSaatleriPublic(seciliDoktor.DoktorID)
+      .then((d: CalismaSaati[]) => setCalismaSaatleri(Array.isArray(d) ? d : []))
+      .catch(() => setCalismaSaatleri([]));
 
-  useEffect(() => {
-    if (!seciliDoktor) { setGunDoluluk({}); return; }
     const gunler = Array.from({ length: 14 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() + i + 1);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -84,6 +110,16 @@ export default function RandevuAlEkrani() {
       setGunDoluluk(map);
     });
   }, [seciliDoktor]);
+
+  // Tarih seçilince dolu saatleri çek
+  useEffect(() => {
+    if (!seciliDoktor || !tarih) { setDoluSaatler([]); setSaat(''); return; }
+    setSaatYukleniyor(true); setSaat('');
+    api.doluSaatler(seciliDoktor.DoktorID, tarih)
+      .then((d: string[]) => setDoluSaatler(Array.isArray(d) ? d : []))
+      .catch(() => setDoluSaatler([]))
+      .finally(() => setSaatYukleniyor(false));
+  }, [seciliDoktor, tarih]);
 
   async function yukleDoktorlar(uz?: string, ad?: string) {
     try {
@@ -255,26 +291,39 @@ export default function RandevuAlEkrani() {
       </Text>
       {!seciliDoktor || !tarih ? (
         <Text style={[styles.saatIpucu, { color: c.textFaint }]}>Önce doktor ve tarih seçin.</Text>
-      ) : (
-        <View style={styles.saatGrid}>
-          {TUM_SAATLER.map(s => {
-            const dolu = doluSaatler.some(ds => String(ds).substring(0, 5) === s);
-            const secili = saat === s;
-            return (
-              <TouchableOpacity
-                key={s} onPress={() => !dolu && setSaat(s)} disabled={dolu}
-                style={[styles.saatButon, {
-                  backgroundColor: dolu ? c.surface : secili ? '#0ea5e9' : c.card,
-                  borderColor: secili ? '#0ea5e9' : c.border, opacity: dolu ? 0.5 : 1,
-                }]}
-              >
-                <Text style={[styles.saatYazi, { color: dolu ? c.textFaint : secili ? '#fff' : c.text }]}>{s}</Text>
-                {dolu && <Text style={[styles.doluYazi, { color: c.textFaint }]}>Dolu</Text>}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+      ) : (() => {
+        const uygunSaatler = uygunSaatleriHesapla(calismaSaatleri, tarih);
+        if (calismaSaatleri.length > 0 && uygunSaatler.length === 0) {
+          return (
+            <View style={[styles.calismiyor, { backgroundColor: c.card, borderColor: c.border }]}>
+              <Text style={{ fontSize: 28, marginBottom: 6 }}>🚫</Text>
+              <Text style={[styles.calismiyorYazi, { color: c.textMuted }]}>Bu gün doktor çalışmıyor</Text>
+              <Text style={[styles.calismiyorAlt, { color: c.textFaint }]}>Başka bir tarih seçin</Text>
+            </View>
+          );
+        }
+        const gosterilecekSaatler = uygunSaatler.length > 0 ? uygunSaatler : ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
+        return (
+          <View style={styles.saatGrid}>
+            {gosterilecekSaatler.map(s => {
+              const dolu = doluSaatler.some(ds => String(ds).substring(0, 5) === s);
+              const secili = saat === s;
+              return (
+                <TouchableOpacity
+                  key={s} onPress={() => !dolu && setSaat(s)} disabled={dolu}
+                  style={[styles.saatButon, {
+                    backgroundColor: dolu ? c.surface : secili ? '#0ea5e9' : c.card,
+                    borderColor: secili ? '#0ea5e9' : c.border, opacity: dolu ? 0.5 : 1,
+                  }]}
+                >
+                  <Text style={[styles.saatYazi, { color: dolu ? c.textFaint : secili ? '#fff' : c.text }]}>{s}</Text>
+                  {dolu && <Text style={[styles.doluYazi, { color: c.textFaint }]}>Dolu</Text>}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        );
+      })()}
 
       {/* Not */}
       <Text style={[styles.etiket, { color: c.textMuted, marginTop: 4 }]}>Not (opsiyonel)</Text>
@@ -442,4 +491,7 @@ const styles = StyleSheet.create({
   profilBolum: { marginBottom: 16 },
   profilBaslik: { fontSize: 12, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   yorumKart: { borderRadius: 10, padding: 12, marginBottom: 8 },
+  calismiyor: { borderRadius: 14, padding: 24, alignItems: 'center', borderWidth: 1, marginBottom: 12 },
+  calismiyorYazi: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  calismiyorAlt: { fontSize: 12 },
 });

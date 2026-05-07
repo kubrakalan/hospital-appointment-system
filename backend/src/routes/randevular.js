@@ -161,6 +161,28 @@ router.get('/doktor/:id', async (req, res) => {
 });
 
 // ============================================================
+// GET /api/randevular/doktor/:id/calisma-saatleri — public
+// ============================================================
+router.get('/doktor/:id/calisma-saatleri', async (req, res) => {
+  if (isNaN(parseInt(req.params.id))) return res.status(400).json({ hata: 'Geçersiz doktor ID' });
+  try {
+    const pool = await getPool();
+    const sonuc = await pool.request()
+      .input('doktorId', sql.Int, req.params.id)
+      .query(`
+        SELECT dc.Gun, dc.BaslangicSaat, dc.BitisSaat
+        FROM DoktorCalisma dc
+        JOIN Doktorlar d ON dc.DoktorID = d.DoktorID
+        WHERE d.DoktorID = @doktorId
+      `);
+    res.json(sonuc.recordset);
+  } catch (err) {
+    logger.error(`Doktor çalışma saatleri (public) hatası: ${err.message}`);
+    res.status(500).json({ hata: 'Sunucu hatası' });
+  }
+});
+
+// ============================================================
 // GET /api/randevular/dolu-saatler?doktorId=X&tarih=YYYY-MM-DD
 // O doktora o günkü dolu saatleri döndürür
 // ============================================================
