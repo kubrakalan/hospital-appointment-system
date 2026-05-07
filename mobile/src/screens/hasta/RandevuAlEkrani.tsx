@@ -183,6 +183,13 @@ export default function RandevuAlEkrani() {
     } finally { setGonderiyor(false); }
   }
 
+  // Saat grid için hesaplamalar (render dışında)
+  const uygunSaatler = uygunSaatleriHesapla(calismaSaatleri, tarih);
+  const doktorCalismiyor = calismaSaatleri.length > 0 && tarih !== '' && uygunSaatler.length === 0;
+  const gosterilecekSaatler = uygunSaatler.length > 0
+    ? uygunSaatler
+    : ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
+
   if (yukleniyor) return <View style={[styles.orta, { backgroundColor: c.bg }]}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
 
   return (
@@ -297,41 +304,34 @@ export default function RandevuAlEkrani() {
       <Text style={[styles.etiket, { color: c.textMuted }]}>
         Saat {saatYukleniyor && <ActivityIndicator size="small" color="#0ea5e9" />}
       </Text>
-      {!seciliDoktor || !tarih ? (
+      {(!seciliDoktor || !tarih) ? (
         <Text style={[styles.saatIpucu, { color: c.textFaint }]}>Önce doktor ve tarih seçin.</Text>
-      ) : (() => {
-        const uygunSaatler = uygunSaatleriHesapla(calismaSaatleri, tarih);
-        if (calismaSaatleri.length > 0 && uygunSaatler.length === 0) {
-          return (
-            <View style={[styles.calismiyor, { backgroundColor: c.card, borderColor: c.border }]}>
-              <Text style={{ fontSize: 28, marginBottom: 6 }}>🚫</Text>
-              <Text style={[styles.calismiyorYazi, { color: c.textMuted }]}>Bu gün doktor çalışmıyor</Text>
-              <Text style={[styles.calismiyorAlt, { color: c.textFaint }]}>Başka bir tarih seçin</Text>
-            </View>
-          );
-        }
-        const gosterilecekSaatler = uygunSaatler.length > 0 ? uygunSaatler : ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
-        return (
-          <View style={styles.saatGrid}>
-            {gosterilecekSaatler.map(s => {
-              const dolu = doluSaatler.some(ds => String(ds).substring(0, 5) === s);
-              const secili = saat === s;
-              return (
-                <TouchableOpacity
-                  key={s} onPress={() => !dolu && setSaat(s)} disabled={dolu}
-                  style={[styles.saatButon, {
-                    backgroundColor: dolu ? c.surface : secili ? '#0ea5e9' : c.card,
-                    borderColor: secili ? '#0ea5e9' : c.border, opacity: dolu ? 0.5 : 1,
-                  }]}
-                >
-                  <Text style={[styles.saatYazi, { color: dolu ? c.textFaint : secili ? '#fff' : c.text }]}>{s}</Text>
-                  {dolu && <Text style={[styles.doluYazi, { color: c.textFaint }]}>Dolu</Text>}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        );
-      })()}
+      ) : doktorCalismiyor ? (
+        <View style={[styles.calismiyor, { backgroundColor: c.card, borderColor: c.border }]}>
+          <Text style={{ fontSize: 28, marginBottom: 6 }}>🚫</Text>
+          <Text style={[styles.calismiyorYazi, { color: c.textMuted }]}>Bu gün doktor çalışmıyor</Text>
+          <Text style={[styles.calismiyorAlt, { color: c.textFaint }]}>Başka bir tarih seçin</Text>
+        </View>
+      ) : (
+        <View style={styles.saatGrid}>
+          {gosterilecekSaatler.map(s => {
+            const dolu = doluSaatler.some(ds => String(ds).substring(0, 5) === s);
+            const secili = saat === s;
+            return (
+              <TouchableOpacity
+                key={s} onPress={() => !dolu && setSaat(s)} disabled={dolu}
+                style={[styles.saatButon, {
+                  backgroundColor: dolu ? c.surface : secili ? '#0ea5e9' : c.card,
+                  borderColor: secili ? '#0ea5e9' : c.border, opacity: dolu ? 0.5 : 1,
+                }]}
+              >
+                <Text style={[styles.saatYazi, { color: dolu ? c.textFaint : secili ? '#fff' : c.text }]}>{s}</Text>
+                {dolu && <Text style={[styles.doluYazi, { color: c.textFaint }]}>Dolu</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       {/* Not */}
       <Text style={[styles.etiket, { color: c.textMuted, marginTop: 4 }]}>Not (opsiyonel)</Text>
