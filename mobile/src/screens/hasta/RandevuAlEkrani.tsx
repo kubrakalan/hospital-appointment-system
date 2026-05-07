@@ -37,13 +37,21 @@ const JS_GUN_MAP: Record<number, string> = {
   4: 'Perşembe', 5: 'Cuma', 6: 'Cumartesi',
 };
 
+function saatStrCalistir(deger: any): string {
+  if (!deger) return '';
+  const s = String(deger);
+  // mssql time → "1970-01-01T09:00:00.000Z" formatı
+  if (s.includes('T')) return s.split('T')[1].substring(0, 5);
+  return s.substring(0, 5);
+}
+
 function uygunSaatleriHesapla(calismaSaatleri: CalismaSaati[], tarih: string): string[] {
   if (!tarih || calismaSaatleri.length === 0) return [];
   const gunAdi = JS_GUN_MAP[new Date(tarih + 'T00:00:00').getDay()];
   const calisma = calismaSaatleri.find(c => c.Gun === gunAdi);
   if (!calisma) return [];
-  const bas = calisma.BaslangicSaat?.substring(0, 5) ?? '09:00';
-  const bit = calisma.BitisSaat?.substring(0, 5) ?? '17:00';
+  const bas = saatStrCalistir(calisma.BaslangicSaat) || '09:00';
+  const bit = saatStrCalistir(calisma.BitisSaat) || '17:00';
   return TUM_OLASI_SAATLER.filter(s => s >= bas && s < bit);
 }
 

@@ -170,7 +170,9 @@ router.get('/doktor/:id/calisma-saatleri', async (req, res) => {
     const sonuc = await pool.request()
       .input('doktorId', sql.Int, req.params.id)
       .query(`
-        SELECT dc.Gun, dc.BaslangicSaat, dc.BitisSaat
+        SELECT dc.Gun,
+          LEFT(CONVERT(varchar(8), dc.BaslangicSaat, 108), 5) AS BaslangicSaat,
+          LEFT(CONVERT(varchar(8), dc.BitisSaat,     108), 5) AS BitisSaat
         FROM DoktorCalisma dc
         JOIN Doktorlar d ON dc.DoktorID = d.DoktorID
         WHERE d.DoktorID = @doktorId
